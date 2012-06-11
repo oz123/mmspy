@@ -166,7 +166,6 @@ class project():
         """
         print "Not implemented yet"
 
-
 class ASCIIRaster():
     def __init__(self):
         self.ncols      =  100
@@ -200,6 +199,38 @@ class ASCIIRaster():
         self.xurcorner = self.extent[1] 
         self.yurcorner = self.extent[3]
         self.data = gdal_array.DatasetReadAsArray(dataset)
+        
+    def fillRasterPoints(self, Xres, Yres):
+        """
+        Create data points of each raster pixel, based on extents
+        and X,Y resolution 
+        
+        If we have a grid with X from 0 to 2 and Y from 0 to 3:
+        
+         2.5| +     +      
+          2 |
+         1.5| +     +
+          1 |
+         .5 | +     +
+            +----------        
+              .5 1 1.5 2
+          
+        The pixel centers are: 
+        p1x 0.5, p1y 0.5
+        p2x 1.5, p2y 0.5
+        p3x 0.5, p3y 1.51
+        p4x 1.5, p4y 1.5
+        p5x 0.5, p5y 2.5
+        p6x 1.5, p6y 2.5
+        ...
+        """
+        self.Xrange = np.arange(self.xllcorner+0.5*Xres, 
+                           self.xurcorner+0.5*Xres,Xres) 
+        self.Yrange = np.arange(self.yllcorner+0.5*Yres, 
+                           self.yurcorner+0.5*Yres,Yres)
+        X, Y = np.meshgrid(self.Xrange, self.Yrange)
+        self.rasterpoints = np.column_stack((X.flatten(), 
+            Y.flatten())) 
     
     def Writer(self, dst_filename, array, topLeftOrigin, ewRes, nsRes, proj=31468): 
         """
@@ -284,38 +315,6 @@ class MaskRaster(ASCIIRaster):
         self.boundingvertices=np.asarray(boundary, dtype=np.float64)
         #matplotlib.nxutils.points_inside_poly(mask.gridcenters2, [[0,0],[0,1],[1,0]]
     
-    def fillRasterPoints(self, Xres, Yres):
-        """
-        Create thdata points of each raster pixel, based on extents
-        and X,Y resolution 
-        
-        If we have a grid with X from 0 to 2 and Y from 0 to 3:
-        
-         2.5| +     +      
-          2 |
-         1.5| +     +
-          1 |
-         .5 | +     +
-            +----------        
-              .5 1 1.5 2
-          
-        The pixel centers are: 
-        p1x 0.5, p1y 0.5
-        p2x 1.5, p2y 0.5
-        p3x 0.5, p3y 1.51
-        p4x 1.5, p4y 1.5
-        p5x 0.5, p5y 2.5
-        p6x 1.5, p6y 2.5
-        ...
-        """
-        self.Xrange = np.arange(self.xllcorner+0.5*Xres, 
-                           self.xurcorner+0.5*Xres,Xres) 
-        self.Yrange = np.arange(self.yllcorner+0.5*Yres, 
-                           self.yurcorner+0.5*Yres,Yres)
-        X, Y = np.meshgrid(self.Xrange, self.Yrange)
-        self.rasterpoints = np.column_stack((X.flatten(), 
-            Y.flatten())) 
-    
     def getMask(self):
         """
         getMask takes a list of points, and a list of vertices, 
@@ -330,4 +329,52 @@ class MaskRaster(ASCIIRaster):
         self.mask.resize(self.Yrange.size, self.Xrange.size)
         self.mask = np.flipud(self.mask)
 
-
+class LandUseShp():
+    """
+    Get landuses from shapefile, create landuses raster
+    """
+    def __init__(self,shapeFilePath):
+        self.LandUses = []
+        self.Codes = [] #Store Categories
+        self.NPolygons = 1 # number of polygons in layer
+        driver = ogr.GetDriverByName('ESRI Shapefile')
+        dataSource = driver.Open(shapeFilePath, 0)
+        layer = dataSource.GetLayer()
+        self.NPolygons = layer.GetFeatureCount()
+        self.Boundaries = [""]*self.NPolygons   # store vertices of each polygon
+        
+        for polygon in range(self.NPolygons):
+            area = layer.GetFeature(polygon)
+            Name = area.GetField(0)
+            Kategorie = area.GetField(1)
+            self.LandUses.append(Name)
+            self.Codes.append(Kategorie)
+            geometry = area.GetGeometryRef()
+            boundary_raw = str(geometry.GetBoundary())
+            #remove tail and head
+            boundary = boundary_raw[12:-1]
+            boundary = boundary.split(',')
+            #print boundary
+            lenboundary = len(boundary)
+            #for i in range(lenboundary):
+            #    boundary[i] = boundary[i].split(' ')
+            #print boundary
+            #convert each coordinate from string to float
+            for x, point in enumerate(boundary):
+                boundary[x] = point.split()
+            boundingvertices=np.asarray(boundary, dtype=np.float64)
+            self.Boundaries[polygon] = boundingvertices
+            #self.Boundaries.append(boundary)
+            
+            #print boundary
+            raw_input("asdsad")
+            #for x, point in enumerate(boundary):
+            #    boundary[x] = point.split()
+                # print boundary
+                # TODO: THIS CODE is Correct only if AOI has one polygon
+                #       We need a fix in case we have multiple polygons
+            #    np.set_printoptions(precision=18)
+            #    self.boundingvertices=np.asarray(boundary, dtype=np.float64)
+        #return LandUses, Codes, Boundaries
+    
+shapeFilePath = "SzenarioA/ScALayout1.shp"
