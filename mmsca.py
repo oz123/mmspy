@@ -6,7 +6,8 @@ from numpy import ma, ones,ones_like,  zeros_like, ndenumerate, empty, dtype
 import csv
 import os, ConfigParser, sys, re
 import shutil
-
+from matplotlib import nxutils
+import numpy as np
 
 config = ConfigParser.RawConfigParser()
 
@@ -195,15 +196,59 @@ class ASCIIRaster():
         #Out[44]: [2.555355548858813, 49.49721527099638, 6.40833997726444, 51.50382232666015]
         # the elements 2 and 3 of extent ans bbox are swapped!
         self.xllcorner = self.extent[0]
-        self.yllcorner = self.extent[3]
+        self.yllcorner = self.extent[2]
         self.xurcorner = self.extent[1] 
-        self.yurcorner = self.extent[2]
+        self.yurcorner = self.extent[3]
         self.data = gdal_array.DatasetReadAsArray(dataset)
+    
+    def Writer(self, dst_filename, array, topLeftOrigin, ewRes, nsRes, proj=31468): 
+        """
+        This is a generic GDAL function to write ASCII Rasters.
+        Here it is an aid function called by ClipPollution and others.
+        inputs:
+        dst_filename - string - relative path to write the ASCII raster
+        array - ndarray, numpy array - a data array to be written in to the file. 
+        ewRes - East West Resolution
+        nsRes - North South Resolution
+        proj - projection (separate .prj file specifying the projection. 
+               see  http://spatialreference.org/ref/epsg/31468/.
+               The default is Gauss Kruger DHDN zone 4, relevant for
+               North Eastern Germany.
+        
+        output:
+        file - This function writes an ASCII raster file to the same path as 
+        dst_filename.
+        """
+        format = "MEM"
+        driver = gdal.GetDriverByName(format)
+        dst_ds = driver.Create(dst_filename, len(array[0]), len(array), \
+                1, gdal.GDT_Float32)
+        extent = (topLeftOrigin[0], ewRes, 0, topLeftOrigin[1], 0, nsRes )
+        dst_ds.SetGeoTransform(extent)
+        srs = osr.SpatialReference()
+        srs.ImportFromEPSG(proj) 
+        dst_ds.SetProjection(srs.ExportToWkt())
+        dst_ds.GetRasterBand(1).SetNoDataValue(-9999)
+        dst_ds.GetRasterBand(1).WriteArray(array)
+        format = 'AAIGrid'
+        driver = gdal.GetDriverByName(format)
+        dst_ds_new = driver.CreateCopy(dst_filename, dst_ds)
+        dst_ds = None
 
 class MaskRaster(ASCIIRaster):
     """
     Define a Mask raster containing Zero for points outside the area
     of interest, and One for points inside the area of interest.
+    
+    test usage:
+    import time
+    a = time.time()
+    test = MaskRaster()
+    test.getAreaofInterest("DATA/area_of_interest.shp")
+    test.fillRasterPoints(10,10)
+    test.getMask()
+    test.Writer("test_mask.asc", test.mask, (test.extent[0], test.extent[3]),10,10)
+    print "finished in:", time.time() - a , "sec"
     """
     #def __init__(self,aoi_shp_file):
     #    print "take in area_of_interest shape file. not implemented yet."
@@ -216,11 +261,10 @@ class MaskRaster(ASCIIRaster):
         print 'Extent des Bewertungsgebiets (area_of_interest):', self.extent
         print 'UL:', self.extent[0], self.extent[3]
         print 'LR:', self.extent[1], self.extent[2]
-                
         self.xllcorner = self.extent[0]
-        self.yllcorner = self.extent[3]
+        self.yllcorner = self.extent[2]
         self.xurcorner = self.extent[1] 
-        self.yurcorner = self.extent[2]
+        self.yurcorner = self.extent[3]
         area = layer.GetFeature(0)
         geometry = area.GetGeometryRef()
         boundary_raw = str(geometry.GetBoundary())
@@ -240,9 +284,9 @@ class MaskRaster(ASCIIRaster):
         self.boundingvertices=np.asarray(boundary, dtype=np.float64)
         #matplotlib.nxutils.points_inside_poly(mask.gridcenters2, [[0,0],[0,1],[1,0]]
     
-   def fillRasterPoints(self, Xres, Yres):
+    def fillRasterPoints(self, Xres, Yres):
         """
-        Create the data points of each raster pixel, based on extents
+        Create thdata points of each raster pixel, based on extents
         and X,Y resolution 
         
         If we have a grid with X from 0 to 2 and Y from 0 to 3:
@@ -258,19 +302,32 @@ class MaskRaster(ASCIIRaster):
         The pixel centers are: 
         p1x 0.5, p1y 0.5
         p2x 1.5, p2y 0.5
-        p3x 0.5, p3y 1.5
+        p3x 0.5, p3y 1.51
         p4x 1.5, p4y 1.5
         p5x 0.5, p5y 2.5
         p6x 1.5, p6y 2.5
         ...
         """
-        Xrange = np.arange(self.xllcorner+0.5*Xres, 
+        self.Xrange = np.arange(self.xllcorner+0.5*Xres, 
                            self.xurcorner+0.5*Xres,Xres) 
-        Yrange = np.arange(self.yllcorner+0.5*Yres, 
+        self.Yrange = np.arange(self.yllcorner+0.5*Yres, 
                            self.yurcorner+0.5*Yres,Yres)
-        X, Y = np.meshgrid(Xrange, Yrange)
+        X, Y = np.meshgrid(self.Xrange, self.Yrange)
         self.rasterpoints = np.column_stack((X.flatten(), 
             Y.flatten())) 
     
     def getMask(self):
-        
+        """
+        getMask takes a list of points, and a list of vertices, 
+        representing the polygon boundaries, and returns a Boolean 
+        array with True for points inside the polygon and False for 
+        points outside the polygon.
+        TODO: make this function use multithreading so we can go
+        a bit faster !
+        """
+        self.mask=nxutils.points_inside_poly(self.rasterpoints, 
+                    self.boundingvertices)
+        self.mask.resize(self.Yrange.size, self.Xrange.size)
+        self.mask = np.flipud(self.mask)
+
+
