@@ -172,20 +172,32 @@ class ASCIIRaster():
         self.nrows      =  100
         self.xllcorner  =   0
         self.yllcorner  =   0
+        self.extent = []
         self.cellsize  =    10
         self.NODATA_value = -9999
         self.data = np.zeros((0,0))
+    
     def Reader(self, filename):
         """
         read an asci file, store a numpy array containing all data
         """
         dataset = gdal.Open(filename)
-        extent = dataset.GetGeoTransform()
+        self.extent = dataset.GetGeoTransform()
         self.ncols = dataset.RasterXSize #ncols
         self.nrows = dataset.RasterYSize #nrows
-        self.xllcorner = extent[0]
-        self.yllcorner = extent[3]
-        self.cellsize  = extent[1]
+        # TODO: fix me, extent here is wrong!
+        # This extents are correct for shape files
+        # note for future, when reading shape files with shapelib
+        # In [43]: mask.extent
+        #Out[43]: (2.555355548858813, 6.40833997726444, 49.49721527099638, 51.50382232666015)
+        
+        #In [44]: r.bbox
+        #Out[44]: [2.555355548858813, 49.49721527099638, 6.40833997726444, 51.50382232666015]
+        # the elements 2 and 3 of extent ans bbox are swapped!
+        self.xllcorner = self.extent[0]
+        self.yllcorner = self.extent[3]
+        self.xurcorner = self.extent[1] 
+        self.yurcorner = self.extent[2]
         self.data = gdal_array.DatasetReadAsArray(dataset)
 
 class MaskRaster(ASCIIRaster):
@@ -195,32 +207,70 @@ class MaskRaster(ASCIIRaster):
     """
     #def __init__(self,aoi_shp_file):
     #    print "take in area_of_interest shape file. not implemented yet."
-    getAreaofInterest(self,aoi_shp_file):
-dataSource = aoi_shp_file
-driver = ogr.GetDriverByName('ESRI Shapefile')
-dataSource = driver.Open(dataSource, 0)
-layer = dataSource.GetLayer()
-extent = layer.GetExtent()
-print 'Extent des Bewertungsgebiets (area_of_interest):', extent
-print 'UL:', extent[0], extent[3]
-print 'LR:', extent[1], extent[2]
-area = layer.GetFeature(0)
-geometry = area.GetGeometryRef()
-boundary_raw = str(geometry.GetBoundary())
-#need some processing to convert boundary raw to a usefull form !
-#remove tail and head
-boundary = boundary_raw[12:-1]
-boundary = boundary.split(',')#convert the string to a list of strings
-#convert the string to a list of lists (couples of x y coordinates)      
-for x, point in enumerate(boundary):
-    boundary[x] = point.split()
-print boundary
-b2 = []
-#convert each coordinate from string to float
-#for i in range(lenboundary):
-#    boundary[i][0] = float(boundary[i][0])
-#    boundary[i][1] = float(boundary[i][1])
-for i in range(len(boundary)):
-    b2.append([float(boundary[i][0]), float(boundary[i][1])])
-#nicer to use numpy
-boundary2=np.asarray(boundary, dtype=float)
+    def getAreaofInterest(self,aoi_shp_file):
+        dataSource = aoi_shp_file
+        driver = ogr.GetDriverByName('ESRI Shapefile')
+        dataSource = driver.Open(dataSource, 0)
+        layer = dataSource.GetLayer()
+        self.extent = layer.GetExtent()
+        print 'Extent des Bewertungsgebiets (area_of_interest):', self.extent
+        print 'UL:', self.extent[0], self.extent[3]
+        print 'LR:', self.extent[1], self.extent[2]
+                
+        self.xllcorner = self.extent[0]
+        self.yllcorner = self.extent[3]
+        self.xurcorner = self.extent[1] 
+        self.yurcorner = self.extent[2]
+        area = layer.GetFeature(0)
+        geometry = area.GetGeometryRef()
+        boundary_raw = str(geometry.GetBoundary())
+        boundary = boundary_raw[12:-1]
+        #some processing to convert boundary raw to a usefull form !
+        #remove tail and head
+        boundary = boundary.split(',')#convert the string to a list of strings
+        #convert the string to a list of lists (couples of x y coordinates)      
+        for x, point in enumerate(boundary):
+            #pointx, pointy = point.split()
+            #boundary[x] = float(pointx), float(pointy)
+            boundary[x] = point.split()
+        # print boundary
+        # TODO: THIS CODE is Correct only if AOI has one polygon
+        #       We need a fix in case we have multiple polygons
+        np.set_printoptions(precision=18)
+        self.boundingvertices=np.asarray(boundary, dtype=np.float64)
+        #matplotlib.nxutils.points_inside_poly(mask.gridcenters2, [[0,0],[0,1],[1,0]]
+    
+   def fillRasterPoints(self, Xres, Yres):
+        """
+        Create the data points of each raster pixel, based on extents
+        and X,Y resolution 
+        
+        If we have a grid with X from 0 to 2 and Y from 0 to 3:
+        
+         2.5| +     +      
+          2 |
+         1.5| +     +
+          1 |
+         .5 | +     +
+            +----------        
+              .5 1 1.5 2
+          
+        The pixel centers are: 
+        p1x 0.5, p1y 0.5
+        p2x 1.5, p2y 0.5
+        p3x 0.5, p3y 1.5
+        p4x 1.5, p4y 1.5
+        p5x 0.5, p5y 2.5
+        p6x 1.5, p6y 2.5
+        ...
+        """
+        Xrange = np.arange(self.xllcorner+0.5*Xres, 
+                           self.xurcorner+0.5*Xres,Xres) 
+        Yrange = np.arange(self.yllcorner+0.5*Yres, 
+                           self.yurcorner+0.5*Yres,Yres)
+        X, Y = np.meshgrid(Xrange, Yrange)
+        self.rasterpoints = np.column_stack((X.flatten(), 
+            Y.flatten())) 
+    
+    def getMask(self):
+        
