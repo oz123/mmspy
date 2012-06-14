@@ -1,24 +1,25 @@
 # -*- coding: utf-8 -*-  
 """
-#        This file is the main code of the conflictAnalysis tool developed in DSITE group
-#        Center for Applied Geosciences, University of Tuebingen, Germany
-#        The algorithm was created by Max Morio, and written in python by Oz Nahum
-#       and Max Morio.
-#
-#       This program is free software; you can redistribute it and/or modify
-#       it under the terms of the GNU General Public License as published by
-#       the Free Software Foundation; either version 2 of the License, or
-#       (at your option) any later version.
-#       
-#       This program is distributed in the hope that it will be useful,
-#       but WITHOUT ANY WARRANTY; without even the implied warranty of
-#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#       GNU General Public License for more details.
-#       
-#       You should have received a copy of the GNU General Public License
-#       along with this program; if not, write to the Free Software
-#       Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
-#       MA 02110-1301, USA.
+  This file is the main code of the conflictAnalysis tool developed in 
+  the DSITE Group, Center for Applied Geosciences, University of Tuebingen, 
+  Germany.
+  The algorithm was created by Max Morio, and written in python by Oz Nahum
+  and Max Morio.
+
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation; either version 2 of the License, or
+  (at your option) any later version.
+    
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+     
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+  MA 02110-1301, USA.
 """
 
 from osgeo import ogr
@@ -123,7 +124,8 @@ class Project():
                 dirname = idx.replace(self.aktlayout + '/opttemp', '/opttemp')
                 shutil.copytree(idx, dirname)
         #delete the dir including files and subdirs
-        shutil.rmtree(self.aktscenario + '/' + self.aktlayout, ignore_errors=True)
+        shutil.rmtree(self.aktscenario + '/' + self.aktlayout, 
+            ignore_errors=True)
         #create the layout dir, again
         if not os.path.isdir(self.aktscenario + '/' + self.aktlayout):
             os.mkdir(self.aktscenario + '/' + self.aktlayout)
@@ -158,11 +160,11 @@ class ASCIIRaster():
         self.extent = []
         self.cellsize  =    10
         self.NODATA_value = -9999
-        self.mask = np.array((0,0))
-        self.data = np.array((0,0))
-        self.rasterpoints = np.array((0,0))
-        self.Xrange = np.array((0,0))
-        self.Yrange = np.array((0,0))
+        self.mask = np.array((0, 0))
+        self.data = np.array((0, 0))
+        self.rasterpoints = np.array((0, 0))
+        self.Xrange = np.array((0, 0))
+        self.Yrange = np.array((0, 0))
 
     def Reader(self, filename):
         """
@@ -175,10 +177,10 @@ class ASCIIRaster():
         # This extents are correct for shape files
         # note for future, when reading shape files with shapelib
         # In [43]: mask.extent
-        #Out[43]: (2.555355548858813, 6.40833997726444, 49.49721527099638, 51.50382232666015)
+        #Out[43]: (2.555355548813, 6.4083399774, 49.49721527098, 51.503826015)
         
         #In [44]: r.bbox
-        #Out[44]: [2.555355548858813, 49.49721527099638, 6.40833997726444, 51.50382232666015]
+        #Out[44]: [2.5553558813, 49.49721527038, 6.4083399744, 51.503826015]
         # the elements 2 and 3 of extent ans bbox are swapped!
         self.xllcorner = self.extent[0]
         self.yllcorner = self.extent[2]
@@ -218,7 +220,8 @@ class ASCIIRaster():
         self.rasterpoints = np.column_stack((xpts.flatten(), 
             ypts.flatten())) 
     
-    def Writer(self, dst_filename, array, topLeftOrigin, ewRes, nsRes, proj=31468): 
+    def Writer(self, dst_filename, array, topLeftOrigin, ewRes, nsRes, 
+        proj=31468): 
         """
         This is a generic GDAL function to write ASCII Rasters.
         Here it is an aid function called by ClipPollution and others.
@@ -267,7 +270,7 @@ class MaskRaster(ASCIIRaster):
     test.Writer("test_mask.asc", test.mask, (test.extent[0], test.extent[3]),10,10)
     print "finished in:", time.time() - a , "sec"
     """
-    def getAreaofInterest(self,aoi_shp_file):
+    def getAreaofInterest(self, aoi_shp_file):
         """
         Read a shape file containing a a single polygon bounding an area of interest.
         """
@@ -290,7 +293,7 @@ class MaskRaster(ASCIIRaster):
         #some processing to convert boundary raw to a usefull form !
         #remove tail and head
         boundary = boundary.split(',')#convert the string to a list of strings
-        #convert the string to a list of lists (couples of x y coordinates)      
+        #convert the string to a list of lists (couples of x y coordinates)   
         for idx, point in enumerate(boundary):
             #pointx, pointy = point.split()
             #boundary[x] = float(pointx), float(pointy)
@@ -300,7 +303,6 @@ class MaskRaster(ASCIIRaster):
         #       We need a fix in case we have multiple polygons
         np.set_printoptions(precision=18)
         self.boundingvertices=np.asarray(boundary, dtype=np.float64)
-        #matplotlib.nxutils.points_inside_poly(mask.gridcenters2, [[0,0],[0,1],[1,0]]
     
     def getMask(self, boundingVertices):
         """
@@ -321,7 +323,7 @@ class LandUseShp():
     """
     Get landuses from shapefile, create landuses raster
     """
-    def __init__(self,shapeFilePath):
+    def __init__(self, shapeFilePath):
         driver = ogr.GetDriverByName('ESRI Shapefile')
         self.LandUses = []
         self.Codes = [] #Store Categories
@@ -329,7 +331,8 @@ class LandUseShp():
         self.dataSource = driver.Open(shapeFilePath, 0)
         self.layer = self.dataSource.GetLayer()
         self.NPolygons = self.layer.GetFeatureCount()
-        self.Boundaries = [""]*self.NPolygons   # store vertices of each polygon      
+        # store vertices of each polygon      
+        self.Boundaries = [""]*self.NPolygons   
         for polygon in range(self.NPolygons):
             area = self.layer.GetFeature(polygon)
             Name = area.GetField(0)
@@ -363,14 +366,15 @@ class LandUseShp():
         raster.data = np.zeros(raster.rasterpoints.shape[0])
         print raster.data.shape
         for boundary, code in zip(self.Boundaries, self.Codes):
-            vmask=nxutils.points_inside_poly(raster.rasterpoints, boundary)
-            raster.mask = np.column_stack([vmask,vmask])
+            vmask = nxutils.points_inside_poly(raster.rasterpoints, boundary)
+            raster.mask = np.column_stack([vmask, vmask])
             
             #deleted_indexes=np.where(raster.mask==True)
             #raster.rasterpoints=np.delete(raster.rasterpoints, 
             #                        np.where(raster.mask==True),0)
             
-            raster.rasterpoints=np.ma.array(raster.rasterpoints, mask=raster.mask, fill_value=[0,0])
+            raster.rasterpoints = np.ma.array(raster.rasterpoints, 
+                    mask = raster.mask, fill_value = [0, 0])
             vmask = vmask*code
             print vmask.shape
             #raster.mask = np.ma.masked_equal(raster.mask, 0)
@@ -387,32 +391,33 @@ class LandUseShp():
             raster.data.resize(raster.Yrange.size, raster.Xrange.size)
             #raster.data.reshape(X)
             raster.data=np.flipud(raster.data)
-            np.putmask(raster.data, raster.data==0, -9999)
-            raster.Writer(rasterFilePath, raster.data, (raster.extent[0], raster.extent[3]),Xres,Yres)
+            np.putmask(raster.data, raster.data == 0, -9999)
+            raster.Writer(rasterFilePath, raster.data, 
+                    (raster.extent[0], raster.extent[3]),Xres,Yres)
         else: return raster
 
 
 
 FilePath = "SzenarioA/ScALayout1.shp"
-A=LandUseShp(FilePath)
+A = LandUseShp(FilePath)
 A.Rasterize(10, 10,"bls.asc")
 FilePath = "SzenarioA/ScALayout2.shp"
-A=LandUseShp(FilePath)
+A = LandUseShp(FilePath)
 A.Rasterize(10, 10,"scal2.asc")
 print "a"
 hapeFilePath = "SzenarioB/ScBLayout1.shp"
-A=LandUseShp(FilePath)
+A = LandUseShp(FilePath)
 A.Rasterize(10, 10,"scbl1.asc")
 FilePath = "SzenarioB/ScBLayout2.shp"
-A=LandUseShp(FilePath)
+A = LandUseShp(FilePath)
 A.Rasterize(10, 10,"sccl1.asc")
 print "d"
 FilePath = "SzenarioC/ScCLayout1.shp"
-A=LandUseShp(FilePath)
+A = LandUseShp(FilePath)
 A.Rasterize(9, 9,"sccl1.asc")
 A.Rasterize(5, 5,"sccl15.asc")
 FilePath = "SzenarioC/ScCLayout2.shp"
-A=LandUseShp(FilePath)
+A = LandUseShp(FilePath)
 A.Rasterize(10, 10,"sccl2.asc")
 
 sys.exit()
