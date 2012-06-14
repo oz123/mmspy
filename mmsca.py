@@ -88,7 +88,7 @@ class Project():
         self.LUTName *= self.n_Landuses
         self.LUTcolours *= self.n_Landuses
         for i in range(1, self.n_Landuses+1):
-            idx=str(i)
+            idx = str(i)
             self.scen_landuseratio[i-1] = config.get(self.aktscenario, 
                                     'scen_landuseratio(' + idx + ')') 
             self.LUTName[i-1] = config.get('DSS_project',
@@ -102,8 +102,8 @@ class Project():
         #      len(selcont) = no_contaminants - 1
         self.selcont *= self.no_contaminants            
         for i in range(self.no_contaminants):
-            idx=str(i+1)
-            self.selcont[i]=config.get(self.aktscenario,
+            idx = str(i+1)
+            self.selcont[i] = config.get(self.aktscenario,
                                             'selcont(' + idx + ')') 
     def cleanup(self):
         """
@@ -112,12 +112,12 @@ class Project():
         suffixes = ['.cost', '.cosk', '.snh', '.WE', 'opttmep']
         mmsfiles2keep = ['']*len(suffixes)
         for idx, suffix in enumerate(suffixes):
-            mmsfiles2keep[idx]=self.aktscenario+'/'+self.aktlayout \
+            mmsfiles2keep[idx] = self.aktscenario+'/'+self.aktlayout \
             +'/'+self.aktlayout+suffix
         # make a copy of needed files in mmsfiles2keep
         for idx in mmsfiles2keep:
             if os.path.isfile(idx):
-                fname=idx.replace(self.aktlayout + '/' + self.aktlayout, 
+                fname = idx.replace(self.aktlayout + '/' + self.aktlayout, 
                 self.aktlayout)
                 shutil.copy2(idx, fname) 
             elif os.path.isdir(idx):
@@ -134,17 +134,12 @@ class Project():
         for idx in mmsfiles2keep:
             fname = idx.replace(self.aktlayout + '/' + self.aktlayout, 
                 self.aktlayout)
-            dirname=idx.replace(self.aktlayout + '/opttemp', '/opttemp')
+            dirname = idx.replace(self.aktlayout + '/opttemp', '/opttemp')
             if os.path.isfile(fname):
                 shutil.copy2(fname, idx) 
             elif os.path.isdir(dirname):
                 shutil.copytree(dirname, idx)
-    
-    def creatMask(self):
-        """
-        Create Mask Raster
-        """
-        print "Not implemented yet"
+
 
 class ASCIIRaster():
     """
@@ -166,7 +161,7 @@ class ASCIIRaster():
         self.Xrange = np.array((0, 0))
         self.Yrange = np.array((0, 0))
 
-    def Reader(self, filename):
+    def rader(self, filename):
         """
         read an asci file, store a numpy array containing all data
         """
@@ -220,7 +215,7 @@ class ASCIIRaster():
         self.rasterpoints = np.column_stack((xpts.flatten(), 
             ypts.flatten())) 
     
-    def Writer(self, dst_filename, array, topLeftOrigin, ewRes, nsRes, 
+    def writer(self, dst_filename, array, topLeftOrigin, ewRes, nsRes, 
         proj=31468): 
         """
         This is a generic GDAL function to write ASCII Rasters.
@@ -264,13 +259,13 @@ class MaskRaster(ASCIIRaster):
     import time
     a = time.time()
     test = MaskRaster()
-    test.getAreaofInterest("DATA/area_of_interest.shp")
+    test.getareofinterest("DATA/area_of_interest.shp")
     test.fillRasterPoints(10,10)
-    test.getMask()
+    test.getmask()
     test.Writer("test_mask.asc", test.mask, (test.extent[0], test.extent[3]),10,10)
     print "finished in:", time.time() - a , "sec"
     """
-    def getAreaofInterest(self, aoi_shp_file):
+    def getareaofinterest(self, aoi_shp_file):
         """
         Read a shape file containing a a single polygon bounding an area of interest.
         """
@@ -301,10 +296,10 @@ class MaskRaster(ASCIIRaster):
         
         # THIS CODE is Correct only if AOI has one polygon
         #       We need a fix in case we have multiple polygons
-        np.set_printoptions(precision=18)
-        self.boundingvertices=np.asarray(boundary, dtype=np.float64)
+        # np.set_printoptions(precision=18)
+        self.boundingvertices = np.asarray(boundary, dtype = np.float64)
     
-    def getMask(self, boundingVertices):
+    def getmask(self, boundingVertices):
         """
         getMask takes a list of points, and a list of vertices, 
         representing the polygon boundaries, and returns a Boolean 
@@ -313,7 +308,7 @@ class MaskRaster(ASCIIRaster):
         !make this function use multithreading so we can go
         a bit faster !
         """
-        self.mask=nxutils.points_inside_poly(self.rasterpoints, 
+        self.mask = nxutils.points_inside_poly(self.rasterpoints, 
                     boundingVertices)
         #self.mask.resize(self.Yrange.size, self.Xrange.size)
         #self.mask = np.flipud(self.mask)
@@ -349,10 +344,10 @@ class LandUseShp():
             #convert each coordinate from string to float
             for idx, point in enumerate(boundary):
                 boundary[idx] = point.split()
-            boundingvertices=np.asarray(boundary, dtype=np.float64)
+            boundingvertices = np.asarray(boundary, dtype = np.float64)
             self.Boundaries[polygon] = boundingvertices
 
-    def Rasterize(self, Xres, Yres, rasterFilePath=None):
+    def rasterize(self, Xres, Yres, rasterFilePath=None):
         """
         raster object does not needs to be created outside
         """
@@ -380,7 +375,7 @@ class LandUseShp():
             #raster.mask = np.ma.masked_equal(raster.mask, 0)
             #raster.mask.set_fill_value(-9999)
             raster.data = raster.data + vmask
-            raster.rasterpoints=raster.rasterpoints.filled()
+            raster.rasterpoints = raster.rasterpoints.filled()
             # insert to deleted indecies bogus points so next time
             # raster.mask is the same size as the previous step
             
@@ -390,35 +385,35 @@ class LandUseShp():
             """
             raster.data.resize(raster.Yrange.size, raster.Xrange.size)
             #raster.data.reshape(X)
-            raster.data=np.flipud(raster.data)
+            raster.data = np.flipud(raster.data)
             np.putmask(raster.data, raster.data == 0, -9999)
             raster.Writer(rasterFilePath, raster.data, 
-                    (raster.extent[0], raster.extent[3]),Xres,Yres)
+                    (raster.extent[0], raster.extent[3]), Xres, Yres)
         else: return raster
 
 
 
 FilePath = "SzenarioA/ScALayout1.shp"
 A = LandUseShp(FilePath)
-A.Rasterize(10, 10,"bls.asc")
+A.rasterize(10, 10,"bls.asc")
 FilePath = "SzenarioA/ScALayout2.shp"
 A = LandUseShp(FilePath)
-A.Rasterize(10, 10,"scal2.asc")
+A.rasterize(10, 10,"scal2.asc")
 print "a"
 hapeFilePath = "SzenarioB/ScBLayout1.shp"
 A = LandUseShp(FilePath)
-A.Rasterize(10, 10,"scbl1.asc")
+A.rasterize(10, 10,"scbl1.asc")
 FilePath = "SzenarioB/ScBLayout2.shp"
 A = LandUseShp(FilePath)
-A.Rasterize(10, 10,"sccl1.asc")
+A.rasterize(10, 10,"sccl1.asc")
 print "d"
 FilePath = "SzenarioC/ScCLayout1.shp"
 A = LandUseShp(FilePath)
-A.Rasterize(9, 9,"sccl1.asc")
-A.Rasterize(5, 5,"sccl15.asc")
+A.rasterize(9, 9,"sccl1.asc")
+A.rasterize(5, 5,"sccl15.asc")
 FilePath = "SzenarioC/ScCLayout2.shp"
 A = LandUseShp(FilePath)
-A.Rasterize(10, 10,"sccl2.asc")
+A.rasterize(10, 10,"sccl2.asc")
 
 sys.exit()
 
