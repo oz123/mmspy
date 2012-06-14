@@ -1,63 +1,37 @@
+# -*- coding: utf-8 -*-  
+"""
+#        This file is the main code of the conflictAnalysis tool developed in DSITE group
+#        Center for Applied Geosciences, University of Tuebingen, Germany
+#        The algorithm was created by Max Morio, and written in python by Oz Nahum
+#       and Max Morio.
+#
+#       This program is free software; you can redistribute it and/or modify
+#       it under the terms of the GNU General Public License as published by
+#       the Free Software Foundation; either version 2 of the License, or
+#       (at your option) any later version.
+#       
+#       This program is distributed in the hope that it will be useful,
+#       but WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#       GNU General Public License for more details.
+#       
+#       You should have received a copy of the GNU General Public License
+#       along with this program; if not, write to the Free Software
+#       Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+#       MA 02110-1301, USA.
+"""
+
 from osgeo import ogr
 from osgeo import osr
 from osgeo import gdal
 from osgeo import gdal_array
-import csv
-import os, ConfigParser, sys, re
+import os, ConfigParser, sys
 import shutil
 from matplotlib import nxutils
 import numpy as np
 
-config = ConfigParser.RawConfigParser()
 
-def readprojectfile(projectinifile): 
-    """
-    Read the Project.ini file which determines  
-    all the settings and file names required for the MMS program run.
-    inputs:
-    projectinifile - string - file name path such as on Linux "/home/user/Safira/DATA/Project.ini" or
-    on Windows: "C:\Documents and Settings\User\Safira\DATA\Project.ini" 
-    
-    outputs:
-    aktscenario - string - name of the scenario layout to process, i.e. 'SzenarioA'
-    aktlayout - string - name of the layout to process, i.e. 'ScALayout1'
-    layoutdir - string - layout direcory, i.e '/home/user/safira/SzenarioA/ScALayout1'
-    scen_landuseratio - list - A description of landusage distribution in precentage, 
-    an example would be: ['40', '38', '14', '8', '0', '0', '0', '0', '0']
-    aoiraster - string - name of Area of Interest raster, i.e 'area_of_interest.asc'
-    LUTColours - 
-    LUTName -
-    n_Landuses, 
-    no_contaminants, 
-    selcont
-    """
-    config.readfp(open(projectinifile))
-    scen_landuseratio = ''    
-    aktscenario = config.get('DSS_project', 'AktSzenario')
-    aktlayout = config.get('DSS_project', 'AktLayout')
-    aoiraster = config.get('DSS_project', 'pathstandort')
-    # MAX, 29.04.2010
-    # start to add new variable in order to make the code generic 
-    # regarding land uses amount and names:
-    n_Landuses= int(config.get('DSS_project', 'n_Landuses'))
-    layoutdir = os.getcwd() + '/' + aktscenario + '/' + aktlayout
-    scen_landuseratio = []
-    LUTName = []
-    LUTcolours=[]
-    for i in range(1, n_Landuses+1):
-        scen_landuseratio.append(config.get(aktscenario, 'scen_landuseratio(' + str(i) + ')')) 
-        LUTName.append(config.get('DSS_project','LUTName(' + str(i) + ')'))
-        LUTcolours.append([config.get('DSS_project','LUTcoloursR(' + str(i) + ')'), \
-                config.get('DSS_project','LUTcoloursG(' + str(i) + ')'), \
-                config.get('DSS_project','LUTcoloursB(' + str(i) + ')')])
-    # get the selected contaminants amongst the available ones ( for which a conflict analysis is to be done )
-    no_contaminants = int( config.get( aktscenario, 'anzahlschadstoffe' ))
-    selcont=[]
-    for i in range( 1, no_contaminants ):
-        selcont.append(config.get(aktscenario,'selcont(' + str(i) + ')') )
-    return aktscenario, aktlayout, layoutdir , scen_landuseratio, aoiraster, LUTcolours, LUTName, n_Landuses, no_contaminants, selcont
-
-class project():
+class Project():
     """
     defines objects to hold project properties
     TODO:
@@ -98,11 +72,15 @@ class project():
         self.scen_landuseratio = ['']
         self.selcont = ['']
     def getconfig(self, projectini):
+        """
+        read Project.ini and populat all the properties of a Project instance.
+        """
+        config = ConfigParser.RawConfigParser()
         config.readfp(open(projectini))
         self.aktscenario = config.get('DSS_project', 'AktSzenario')
         self.aktlayout = config.get('DSS_project', 'AktLayout')
         self.aoiraster = config.get('DSS_project', 'pathstandort')
-        self.n_Landuses= int(config.get('DSS_project', 'n_Landuses'))
+        self.n_Landuses = int(config.get('DSS_project', 'n_Landuses'))
         self.no_contaminants = int(config.get( self.aktscenario, 
                                                 'anzahlschadstoffe'))
         self.scen_landuseratio *= self.n_Landuses
@@ -132,18 +110,18 @@ class project():
         """
         suffixes = ['.cost', '.cosk', '.snh', '.WE', 'opttmep']
         mmsfiles2keep = ['']*len(suffixes)
-        for x, suffix in enumerate(suffixes):
-            mmsfiles2keep[x]=self.aktscenario+'/'+self.aktlayout \
+        for idx, suffix in enumerate(suffixes):
+            mmsfiles2keep[idx]=self.aktscenario+'/'+self.aktlayout \
             +'/'+self.aktlayout+suffix
         # make a copy of needed files in mmsfiles2keep
-        for x in mmsfiles2keep:
-            if os.path.isfile(x):
-                fname=x.replace(self.aktlayout + '/' + self.aktlayout, 
+        for idx in mmsfiles2keep:
+            if os.path.isfile(idx):
+                fname=idx.replace(self.aktlayout + '/' + self.aktlayout, 
                 self.aktlayout)
-                shutil.copy2(x, fname) 
-            elif os.path.isdir(x):
-                dirname = x.replace(self.aktlayout + '/opttemp', '/opttemp')
-                shutil.copytree(x, dirname)
+                shutil.copy2(idx, fname) 
+            elif os.path.isdir(idx):
+                dirname = idx.replace(self.aktlayout + '/opttemp', '/opttemp')
+                shutil.copytree(idx, dirname)
         #delete the dir including files and subdirs
         shutil.rmtree(self.aktscenario + '/' + self.aktlayout, ignore_errors=True)
         #create the layout dir, again
@@ -151,13 +129,14 @@ class project():
             os.mkdir(self.aktscenario + '/' + self.aktlayout)
         #move back the *.cost, *cosk , *snh and *WE files to 
         #the aktlayout dirproj=mmsca.project()
-        for x in mmsfiles2keep:
-            fname = x.replace(self.aktlayout + '/' + self.aktlayout, self.aktlayout)
-            dirname=x.replace(self.aktlayout + '/opttemp', '/opttemp')
+        for idx in mmsfiles2keep:
+            fname = idx.replace(self.aktlayout + '/' + self.aktlayout, 
+                self.aktlayout)
+            dirname=idx.replace(self.aktlayout + '/opttemp', '/opttemp')
             if os.path.isfile(fname):
-                shutil.copy2(fname, x) 
+                shutil.copy2(fname, idx) 
             elif os.path.isdir(dirname):
-                shutil.copytree(dirname, x)
+                shutil.copytree(dirname, idx)
     
     def creatMask(self):
         """
@@ -166,16 +145,25 @@ class project():
         print "Not implemented yet"
 
 class ASCIIRaster():
+    """
+    Wrapper class to handle ASCII Rasters
+    """
     def __init__(self):
         self.ncols      =  100
         self.nrows      =  100
         self.xllcorner  =   0
         self.yllcorner  =   0
+        self.xurcorner  =   0
+        self.yurcorner  =   0
         self.extent = []
         self.cellsize  =    10
         self.NODATA_value = -9999
-        self.data = np.zeros((0,0))
-    
+        self.mask = np.array((0,0))
+        self.data = np.array((0,0))
+        self.rasterpoints = np.array((0,0))
+        self.Xrange = np.array((0,0))
+        self.Yrange = np.array((0,0))
+
     def Reader(self, filename):
         """
         read an asci file, store a numpy array containing all data
@@ -184,7 +172,6 @@ class ASCIIRaster():
         self.extent = dataset.GetGeoTransform()
         self.ncols = dataset.RasterXSize #ncols
         self.nrows = dataset.RasterYSize #nrows
-        # TODO: fix me, extent here is wrong!
         # This extents are correct for shape files
         # note for future, when reading shape files with shapelib
         # In [43]: mask.extent
@@ -199,7 +186,7 @@ class ASCIIRaster():
         self.yurcorner = self.extent[3]
         self.data = gdal_array.DatasetReadAsArray(dataset)
         
-    def fillRasterPoints(self, Xres, Yres):
+    def fillrasterpoints(self, Xres, Yres):
         """
         Create data points of each raster pixel, based on extents
         and X,Y resolution 
@@ -227,9 +214,9 @@ class ASCIIRaster():
                            self.xurcorner+0.5*Xres,Xres) 
         self.Yrange = np.arange(self.yllcorner+0.5*Yres, 
                            self.yurcorner+0.5*Yres,Yres)
-        X, Y = np.meshgrid(self.Xrange, self.Yrange)
-        self.rasterpoints = np.column_stack((X.flatten(), 
-            Y.flatten())) 
+        xpts, ypts = np.meshgrid(self.Xrange, self.Yrange)
+        self.rasterpoints = np.column_stack((xpts.flatten(), 
+            ypts.flatten())) 
     
     def Writer(self, dst_filename, array, topLeftOrigin, ewRes, nsRes, proj=31468): 
         """
@@ -249,8 +236,8 @@ class ASCIIRaster():
         file - This function writes an ASCII raster file to the same path as 
         dst_filename.
         """
-        format = "MEM"
-        driver = gdal.GetDriverByName(format)
+        gformat = "MEM"
+        driver = gdal.GetDriverByName(gformat)
         dst_ds = driver.Create(dst_filename, len(array[0]), len(array), \
                 1, gdal.GDT_Float32)
         extent = (topLeftOrigin[0], ewRes, 0, topLeftOrigin[1], 0, nsRes )
@@ -260,9 +247,9 @@ class ASCIIRaster():
         dst_ds.SetProjection(srs.ExportToWkt())
         dst_ds.GetRasterBand(1).SetNoDataValue(-9999)
         dst_ds.GetRasterBand(1).WriteArray(array)
-        format = 'AAIGrid'
-        driver = gdal.GetDriverByName(format)
-        dst_ds_new = driver.CreateCopy(dst_filename, dst_ds)
+        aformat = 'AAIGrid'
+        driver = gdal.GetDriverByName(aformat)
+        dst_ds = driver.CreateCopy(dst_filename, dst_ds)
         dst_ds = None
 
 class MaskRaster(ASCIIRaster):
@@ -281,6 +268,9 @@ class MaskRaster(ASCIIRaster):
     print "finished in:", time.time() - a , "sec"
     """
     def getAreaofInterest(self,aoi_shp_file):
+        """
+        Read a shape file containing a a single polygon bounding an area of interest.
+        """
         dataSource = aoi_shp_file
         driver = ogr.GetDriverByName('ESRI Shapefile')
         dataSource = driver.Open(dataSource, 0)
@@ -301,12 +291,12 @@ class MaskRaster(ASCIIRaster):
         #remove tail and head
         boundary = boundary.split(',')#convert the string to a list of strings
         #convert the string to a list of lists (couples of x y coordinates)      
-        for x, point in enumerate(boundary):
+        for idx, point in enumerate(boundary):
             #pointx, pointy = point.split()
             #boundary[x] = float(pointx), float(pointy)
-            boundary[x] = point.split()
-        # print boundary
-        # TODO: THIS CODE is Correct only if AOI has one polygon
+            boundary[idx] = point.split()
+        
+        # THIS CODE is Correct only if AOI has one polygon
         #       We need a fix in case we have multiple polygons
         np.set_printoptions(precision=18)
         self.boundingvertices=np.asarray(boundary, dtype=np.float64)
@@ -318,7 +308,7 @@ class MaskRaster(ASCIIRaster):
         representing the polygon boundaries, and returns a Boolean 
         array with True for points inside the polygon and False for 
         points outside the polygon.
-        TODO: make this function use multithreading so we can go
+        !make this function use multithreading so we can go
         a bit faster !
         """
         self.mask=nxutils.points_inside_poly(self.rasterpoints, 
@@ -354,8 +344,8 @@ class LandUseShp():
             #print boundary
             #lenboundary = len(boundary)
             #convert each coordinate from string to float
-            for x, point in enumerate(boundary):
-                boundary[x] = point.split()
+            for idx, point in enumerate(boundary):
+                boundary[idx] = point.split()
             boundingvertices=np.asarray(boundary, dtype=np.float64)
             self.Boundaries[polygon] = boundingvertices
 
@@ -369,11 +359,10 @@ class LandUseShp():
         raster.yllcorner = raster.extent[2]
         raster.xurcorner = raster.extent[1] 
         raster.yurcorner = raster.extent[3]
-        raster.fillRasterPoints(Xres, Yres)
+        raster.fillrasterpoints(Xres, Yres)
         raster.data = np.zeros(raster.rasterpoints.shape[0])
         print raster.data.shape
-        for boundary, landuse, code in zip(self.Boundaries, 
-                                    self.LandUses, self.Codes):
+        for boundary, code in zip(self.Boundaries, self.Codes):
             vmask=nxutils.points_inside_poly(raster.rasterpoints, boundary)
             raster.mask = np.column_stack([vmask,vmask])
             
@@ -404,30 +393,28 @@ class LandUseShp():
 
 
 
-shapeFilePath = "SzenarioA/ScALayout1.shp"
-A=LandUseShp(shapeFilePath)
-A.Rasterize(10, 10,"scal1.asc")
-shapeFilePath = "SzenarioA/ScALayout2.shp"
-A=LandUseShp(shapeFilePath)
+FilePath = "SzenarioA/ScALayout1.shp"
+A=LandUseShp(FilePath)
+A.Rasterize(10, 10,"bls.asc")
+FilePath = "SzenarioA/ScALayout2.shp"
+A=LandUseShp(FilePath)
 A.Rasterize(10, 10,"scal2.asc")
 print "a"
 hapeFilePath = "SzenarioB/ScBLayout1.shp"
-A=LandUseShp(shapeFilePath)
+A=LandUseShp(FilePath)
 A.Rasterize(10, 10,"scbl1.asc")
-shapeFilePath = "SzenarioB/ScBLayout2.shp"
-A=LandUseShp(shapeFilePath)
+FilePath = "SzenarioB/ScBLayout2.shp"
+A=LandUseShp(FilePath)
 A.Rasterize(10, 10,"sccl1.asc")
 print "d"
-shapeFilePath = "SzenarioC/ScCLayout1.shp"
-A=LandUseShp(shapeFilePath)
+FilePath = "SzenarioC/ScCLayout1.shp"
+A=LandUseShp(FilePath)
 A.Rasterize(9, 9,"sccl1.asc")
 A.Rasterize(5, 5,"sccl15.asc")
-shapeFilePath = "SzenarioC/ScCLayout2.shp"
-A=LandUseShp(shapeFilePath)
+FilePath = "SzenarioC/ScCLayout2.shp"
+A=LandUseShp(FilePath)
 A.Rasterize(10, 10,"sccl2.asc")
 
-
-import sys
 sys.exit()
 
 #MAX TERMIN MONTAG 16:30 25.Juni
