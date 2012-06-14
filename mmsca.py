@@ -2,7 +2,6 @@ from osgeo import ogr
 from osgeo import osr
 from osgeo import gdal
 from osgeo import gdal_array
-from numpy import ma, ones,ones_like,  zeros_like, ndenumerate, empty, dtype
 import csv
 import os, ConfigParser, sys, re
 import shutil
@@ -281,8 +280,6 @@ class MaskRaster(ASCIIRaster):
     test.Writer("test_mask.asc", test.mask, (test.extent[0], test.extent[3]),10,10)
     print "finished in:", time.time() - a , "sec"
     """
-    #def __init__(self,aoi_shp_file):
-    #    print "take in area_of_interest shape file. not implemented yet."
     def getAreaofInterest(self,aoi_shp_file):
         dataSource = aoi_shp_file
         driver = ogr.GetDriverByName('ESRI Shapefile')
@@ -315,7 +312,7 @@ class MaskRaster(ASCIIRaster):
         self.boundingvertices=np.asarray(boundary, dtype=np.float64)
         #matplotlib.nxutils.points_inside_poly(mask.gridcenters2, [[0,0],[0,1],[1,0]]
     
-    def getMask(self):
+    def getMask(self, boundingVertices):
         """
         getMask takes a list of points, and a list of vertices, 
         representing the polygon boundaries, and returns a Boolean 
@@ -325,26 +322,26 @@ class MaskRaster(ASCIIRaster):
         a bit faster !
         """
         self.mask=nxutils.points_inside_poly(self.rasterpoints, 
-                    self.boundingvertices)
-        self.mask.resize(self.Yrange.size, self.Xrange.size)
-        self.mask = np.flipud(self.mask)
+                    boundingVertices)
+        #self.mask.resize(self.Yrange.size, self.Xrange.size)
+        #self.mask = np.flipud(self.mask)
+
 
 class LandUseShp():
     """
     Get landuses from shapefile, create landuses raster
     """
     def __init__(self,shapeFilePath):
+        driver = ogr.GetDriverByName('ESRI Shapefile')
         self.LandUses = []
         self.Codes = [] #Store Categories
         self.NPolygons = 1 # number of polygons in layer
-        driver = ogr.GetDriverByName('ESRI Shapefile')
-        dataSource = driver.Open(shapeFilePath, 0)
-        layer = dataSource.GetLayer()
-        self.NPolygons = layer.GetFeatureCount()
-        self.Boundaries = [""]*self.NPolygons   # store vertices of each polygon
-        
+        self.dataSource = driver.Open(shapeFilePath, 0)
+        self.layer = self.dataSource.GetLayer()
+        self.NPolygons = self.layer.GetFeatureCount()
+        self.Boundaries = [""]*self.NPolygons   # store vertices of each polygon      
         for polygon in range(self.NPolygons):
-            area = layer.GetFeature(polygon)
+            area = self.layer.GetFeature(polygon)
             Name = area.GetField(0)
             Kategorie = area.GetField(1)
             self.LandUses.append(Name)
@@ -355,26 +352,87 @@ class LandUseShp():
             boundary = boundary_raw[12:-1]
             boundary = boundary.split(',')
             #print boundary
-            lenboundary = len(boundary)
-            #for i in range(lenboundary):
-            #    boundary[i] = boundary[i].split(' ')
-            #print boundary
+            #lenboundary = len(boundary)
             #convert each coordinate from string to float
             for x, point in enumerate(boundary):
                 boundary[x] = point.split()
             boundingvertices=np.asarray(boundary, dtype=np.float64)
             self.Boundaries[polygon] = boundingvertices
-            #self.Boundaries.append(boundary)
+
+    def Rasterize(self, Xres, Yres, rasterFilePath=None):
+        """
+        raster object does not needs to be created outside
+        """
+        raster = MaskRaster()
+        raster.extent = self.layer.GetExtent()
+        raster.xllcorner = raster.extent[0]
+        raster.yllcorner = raster.extent[2]
+        raster.xurcorner = raster.extent[1] 
+        raster.yurcorner = raster.extent[3]
+        raster.fillRasterPoints(Xres, Yres)
+        raster.data = np.zeros(raster.rasterpoints.shape[0])
+        print raster.data.shape
+        for boundary, landuse, code in zip(self.Boundaries, 
+                                    self.LandUses, self.Codes):
+            vmask=nxutils.points_inside_poly(raster.rasterpoints, boundary)
+            raster.mask = np.column_stack([vmask,vmask])
             
-            #print boundary
-            raw_input("asdsad")
-            #for x, point in enumerate(boundary):
-            #    boundary[x] = point.split()
-                # print boundary
-                # TODO: THIS CODE is Correct only if AOI has one polygon
-                #       We need a fix in case we have multiple polygons
-            #    np.set_printoptions(precision=18)
-            #    self.boundingvertices=np.asarray(boundary, dtype=np.float64)
-        #return LandUses, Codes, Boundaries
-    
+            #deleted_indexes=np.where(raster.mask==True)
+            #raster.rasterpoints=np.delete(raster.rasterpoints, 
+            #                        np.where(raster.mask==True),0)
+            
+            raster.rasterpoints=np.ma.array(raster.rasterpoints, mask=raster.mask, fill_value=[0,0])
+            vmask = vmask*code
+            print vmask.shape
+            #raster.mask = np.ma.masked_equal(raster.mask, 0)
+            #raster.mask.set_fill_value(-9999)
+            raster.data = raster.data + vmask
+            raster.rasterpoints=raster.rasterpoints.filled()
+            # insert to deleted indecies bogus points so next time
+            # raster.mask is the same size as the previous step
+            
+        if rasterFilePath:
+            """
+            PROBLEM: This still lives 0 intead of no data"
+            """
+            raster.data.resize(raster.Yrange.size, raster.Xrange.size)
+            #raster.data.reshape(X)
+            raster.data=np.flipud(raster.data)
+            np.putmask(raster.data, raster.data==0, -9999)
+            raster.Writer(rasterFilePath, raster.data, (raster.extent[0], raster.extent[3]),Xres,Yres)
+        else: return raster
+
+
+
 shapeFilePath = "SzenarioA/ScALayout1.shp"
+A=LandUseShp(shapeFilePath)
+A.Rasterize(10, 10,"scal1.asc")
+shapeFilePath = "SzenarioA/ScALayout2.shp"
+A=LandUseShp(shapeFilePath)
+A.Rasterize(10, 10,"scal2.asc")
+print "a"
+hapeFilePath = "SzenarioB/ScBLayout1.shp"
+A=LandUseShp(shapeFilePath)
+A.Rasterize(10, 10,"scbl1.asc")
+shapeFilePath = "SzenarioB/ScBLayout2.shp"
+A=LandUseShp(shapeFilePath)
+A.Rasterize(10, 10,"sccl1.asc")
+print "d"
+shapeFilePath = "SzenarioC/ScCLayout1.shp"
+A=LandUseShp(shapeFilePath)
+A.Rasterize(9, 9,"sccl1.asc")
+A.Rasterize(5, 5,"sccl15.asc")
+shapeFilePath = "SzenarioC/ScCLayout2.shp"
+A=LandUseShp(shapeFilePath)
+A.Rasterize(10, 10,"sccl2.asc")
+
+
+import sys
+sys.exit()
+
+#MAX TERMIN MONTAG 16:30 25.Juni
+
+test = MaskRaster()
+#test.getAreaofInterest("DATA/area_of_interest.shp")
+#test.extent=A.layer.GetExtent()
+
