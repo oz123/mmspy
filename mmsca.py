@@ -65,13 +65,15 @@ class Project():
         self.aktscenario = ""
         self.aktlayout = ""
         self.layoutdir = ""
-        self.n_Landuses = 0
-        self.no_contaminants = 0
+        self.nanduses = 0
+        self.n_contaminants = 0
         self.aoiraster = ""
         self.LUTcolours = ['']
         self.LUTName = ['']
         self.scen_landuseratio = ['']
         self.selcont = ['']
+        self.n_landuses = 0
+
     def getconfig(self, projectini):
         """
         read Project.ini and populat all the properties of a Project instance.
@@ -81,13 +83,13 @@ class Project():
         self.aktscenario = config.get('DSS_project', 'AktSzenario')
         self.aktlayout = config.get('DSS_project', 'AktLayout')
         self.aoiraster = config.get('DSS_project', 'pathstandort')
-        self.n_Landuses = int(config.get('DSS_project', 'n_Landuses'))
-        self.no_contaminants = int(config.get( self.aktscenario, 
+        self.n_landuses = int(config.get('DSS_project', 'n_Landuses'))
+        self.n_contaminants = int(config.get( self.aktscenario, 
                                                 'anzahlschadstoffe'))
-        self.scen_landuseratio *= self.n_Landuses
-        self.LUTName *= self.n_Landuses
-        self.LUTcolours *= self.n_Landuses
-        for i in range(1, self.n_Landuses+1):
+        self.scen_landuseratio *= self.n_landuses
+        self.LUTName *= self.n_landuses
+        self.LUTcolours *= self.n_landuses
+        for i in range(1, self.n_landuses+1):
             idx = str(i)
             self.scen_landuseratio[i-1] = config.get(self.aktscenario, 
                                     'scen_landuseratio(' + idx + ')') 
@@ -97,11 +99,11 @@ class Project():
                 config.get('DSS_project','LUTcoloursR(' + idx + ')'), \
                 config.get('DSS_project','LUTcoloursG(' + idx + ')'), \
                 config.get('DSS_project','LUTcoloursB(' + idx + ')')  ]
-        # MAX: note here , len(selcont) = no_contaminants
+        # MAX: note here , len(selcont) = n_contaminants
         #      while in the original readprojectfile 
-        #      len(selcont) = no_contaminants - 1
-        self.selcont *= self.no_contaminants            
-        for i in range(self.no_contaminants):
+        #      len(selcont) = n_contaminants - 1
+        self.selcont *= self.n_contaminants            
+        for i in range(self.n_contaminants):
             idx = str(i+1)
             self.selcont[i] = config.get(self.aktscenario,
                                             'selcont(' + idx + ')') 
@@ -160,6 +162,7 @@ class ASCIIRaster():
         self.rasterpoints = np.array((0, 0))
         self.Xrange = np.array((0, 0))
         self.Yrange = np.array((0, 0))
+        self.boundingvertices = np.array((0, 0))
 
     def rader(self, filename):
         """
@@ -183,7 +186,7 @@ class ASCIIRaster():
         self.yurcorner = self.extent[3]
         self.data = gdal_array.DatasetReadAsArray(dataset)
         
-    def fillrasterpoints(self, Xres, Yres):
+    def fillrasterpoints(self, xres, yres):
         """
         Create data points of each raster pixel, based on extents
         and X,Y resolution 
@@ -207,15 +210,15 @@ class ASCIIRaster():
         p6x 1.5, p6y 2.5
         ...
         """
-        self.Xrange = np.arange(self.xllcorner+0.5*Xres, 
-                           self.xurcorner+0.5*Xres,Xres) 
-        self.Yrange = np.arange(self.yllcorner+0.5*Yres, 
-                           self.yurcorner+0.5*Yres,Yres)
+        self.Xrange = np.arange(self.xllcorner+0.5*xres, 
+                           self.xurcorner+0.5*xres,xres) 
+        self.Yrange = np.arange(self.yllcorner+0.5*yres, 
+                           self.yurcorner+0.5*yres,yres)
         xpts, ypts = np.meshgrid(self.Xrange, self.Yrange)
         self.rasterpoints = np.column_stack((xpts.flatten(), 
             ypts.flatten())) 
     
-    def writer(self, dst_filename, array, topLeftOrigin, ewRes, nsRes, 
+    def writer(self, dst_filename, array, topleft, ew_res, ns_res, 
         proj=31468): 
         """
         This is a generic GDAL function to write ASCII Rasters.
@@ -238,7 +241,7 @@ class ASCIIRaster():
         driver = gdal.GetDriverByName(gformat)
         dst_ds = driver.Create(dst_filename, len(array[0]), len(array), \
                 1, gdal.GDT_Float32)
-        extent = (topLeftOrigin[0], ewRes, 0, topLeftOrigin[1], 0, nsRes )
+        extent = (topleft[0], ew_res, 0, topleft[1], 0, ns_res )
         dst_ds.SetGeoTransform(extent)
         srs = osr.SpatialReference()
         srs.ImportFromEPSG(proj) 
@@ -265,14 +268,18 @@ class MaskRaster(ASCIIRaster):
     test.Writer("test_mask.asc", test.mask, (test.extent[0], test.extent[3]),10,10)
     print "finished in:", time.time() - a , "sec"
     """
+    
+    
+    
+    
     def getareaofinterest(self, aoi_shp_file):
         """
         Read a shape file containing a a single polygon bounding an area of interest.
         """
-        dataSource = aoi_shp_file
+        datasource = aoi_shp_file
         driver = ogr.GetDriverByName('ESRI Shapefile')
-        dataSource = driver.Open(dataSource, 0)
-        layer = dataSource.GetLayer()
+        datasource = driver.Open(datasource, 0)
+        layer = datasource.GetLayer()
         self.extent = layer.GetExtent()
         print 'Extent des Bewertungsgebiets (area_of_interest):', self.extent
         print 'UL:', self.extent[0], self.extent[3]
@@ -299,7 +306,7 @@ class MaskRaster(ASCIIRaster):
         # np.set_printoptions(precision=18)
         self.boundingvertices = np.asarray(boundary, dtype = np.float64)
     
-    def getmask(self, boundingVertices):
+    def getmask(self, vertices):
         """
         getMask takes a list of points, and a list of vertices, 
         representing the polygon boundaries, and returns a Boolean 
@@ -309,7 +316,7 @@ class MaskRaster(ASCIIRaster):
         a bit faster !
         """
         self.mask = nxutils.points_inside_poly(self.rasterpoints, 
-                    boundingVertices)
+                    vertices)
         #self.mask.resize(self.Yrange.size, self.Xrange.size)
         #self.mask = np.flipud(self.mask)
 
@@ -318,36 +325,61 @@ class LandUseShp():
     """
     Get landuses from shapefile, create landuses raster
     """
-    def __init__(self, shapeFilePath):
+    def __init__(self, shapefilepath, copyfile=None):
+        self.filepath=shapefilepath
         driver = ogr.GetDriverByName('ESRI Shapefile')
         self.LandUses = []
         self.Codes = [] #Store Categories
         self.NPolygons = 1 # number of polygons in layer
-        self.dataSource = driver.Open(shapeFilePath, 0)
+        # driver.Open(path,0) -> open read only
+        # driver.Open(path,1) -> open with update option
+        if copyfile:
+            self.copyfilepath=copyfile
+            self.dataSource = driver.Open(copyfilepath, 1)
+        else: self.dataSource = driver.Open(shapefilepath, 0)
         self.layer = self.dataSource.GetLayer()
         self.NPolygons = self.layer.GetFeatureCount()
         # store vertices of each polygon      
         self.Boundaries = [""]*self.NPolygons   
         for polygon in range(self.NPolygons):
             area = self.layer.GetFeature(polygon)
-            Name = area.GetField(0)
-            Kategorie = area.GetField(1)
-            self.LandUses.append(Name)
-            self.Codes.append(Kategorie)
+            name = area.GetField(0)
+            category = area.GetField(1)
+            self.LandUses.append(name)
+            self.Codes.append(category)
             geometry = area.GetGeometryRef()
             boundary_raw = str(geometry.GetBoundary())
             #remove tail and head
             boundary = boundary_raw[12:-1]
             boundary = boundary.split(',')
-            #print boundary
-            #lenboundary = len(boundary)
             #convert each coordinate from string to float
             for idx, point in enumerate(boundary):
                 boundary[idx] = point.split()
             boundingvertices = np.asarray(boundary, dtype = np.float64)
             self.Boundaries[polygon] = boundingvertices
-
-    def rasterize(self, Xres, Yres, rasterFilePath=None):
+    
+    def createcopy(self):
+        """
+        copy the shape file to output file path
+        """
+        # check if dirname exists, if not create it
+        dest_dir=os.path.dirname(self.copyfilepath)
+        if not os.path.exits(os.path.dirname(dest_dir)):
+            os.makedirs(dest_dir)
+        suffixes = ['shp', 'shx' 'dbf']
+        for suffix in suffixes:
+            shutil.copy2(self.filepath[:-3]+suffix,
+                self.copyfilepath[:-3]+suffix)
+        
+        
+    def addfield(self,fieldname):
+        """
+        Add field to attribute table
+        """
+        driver = ogr.GetDriverByName('ESRI Shapefile')
+        
+        print "bla"
+    def rasterize(self, xres, yres, rasterfilepath=None):
         """
         raster object does not needs to be created outside
         """
@@ -357,9 +389,8 @@ class LandUseShp():
         raster.yllcorner = raster.extent[2]
         raster.xurcorner = raster.extent[1] 
         raster.yurcorner = raster.extent[3]
-        raster.fillrasterpoints(Xres, Yres)
+        raster.fillrasterpoints(xres, yres)
         raster.data = np.zeros(raster.rasterpoints.shape[0])
-        print raster.data.shape
         for boundary, code in zip(self.Boundaries, self.Codes):
             vmask = nxutils.points_inside_poly(raster.rasterpoints, boundary)
             raster.mask = np.column_stack([vmask, vmask])
@@ -379,7 +410,7 @@ class LandUseShp():
             # insert to deleted indecies bogus points so next time
             # raster.mask is the same size as the previous step
             
-        if rasterFilePath:
+        if rasterfilepath:
             """
             PROBLEM: This still lives 0 intead of no data"
             """
@@ -387,39 +418,36 @@ class LandUseShp():
             #raster.data.reshape(X)
             raster.data = np.flipud(raster.data)
             np.putmask(raster.data, raster.data == 0, -9999)
-            raster.Writer(rasterFilePath, raster.data, 
-                    (raster.extent[0], raster.extent[3]), Xres, Yres)
+            raster.writer(rasterfilepath, raster.data, 
+                    (raster.extent[0], raster.extent[3]), yres, yres)
         else: return raster
 
 
 
-FilePath = "SzenarioA/ScALayout1.shp"
-A = LandUseShp(FilePath)
+FILEPATH = "SzenarioA/ScALayout1.shp"
+A = LandUseShp(FILEPATH)
 A.rasterize(10, 10,"bls.asc")
-FilePath = "SzenarioA/ScALayout2.shp"
-A = LandUseShp(FilePath)
+FILEPATH = "SzenarioA/ScALayout2.shp"
+A = LandUseShp(FILEPATH)
 A.rasterize(10, 10,"scal2.asc")
 print "a"
-hapeFilePath = "SzenarioB/ScBLayout1.shp"
-A = LandUseShp(FilePath)
+FILEPATH = "SzenarioB/ScBLayout1.shp"
+A = LandUseShp(FILEPATH)
 A.rasterize(10, 10,"scbl1.asc")
-FilePath = "SzenarioB/ScBLayout2.shp"
-A = LandUseShp(FilePath)
+FILEPATH = "SzenarioB/ScBLayout2.shp"
+A = LandUseShp(FILEPATH)
 A.rasterize(10, 10,"sccl1.asc")
 print "d"
-FilePath = "SzenarioC/ScCLayout1.shp"
-A = LandUseShp(FilePath)
+FILEPATH = "SzenarioC/ScCLayout1.shp"
+A = LandUseShp(FILEPATH)
 A.rasterize(9, 9,"sccl1.asc")
 A.rasterize(5, 5,"sccl15.asc")
-FilePath = "SzenarioC/ScCLayout2.shp"
-A = LandUseShp(FilePath)
+FILEPATH = "SzenarioC/ScCLayout2.shp"
+A = LandUseShp(FILEPATH)
 A.rasterize(10, 10,"sccl2.asc")
 
-sys.exit()
+#sys.exit()
 
 #MAX TERMIN MONTAG 16:30 25.Juni
 
-test = MaskRaster()
-#test.getAreaofInterest("DATA/area_of_interest.shp")
-#test.extent=A.layer.GetExtent()
 
