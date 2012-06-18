@@ -30,7 +30,7 @@ import os, ConfigParser, sys
 import shutil
 from matplotlib import nxutils
 import numpy as np
-
+import csv
 
 class Project():
     """
@@ -65,7 +65,6 @@ class Project():
         self.aktscenario = ""
         self.aktlayout = ""
         self.layoutdir = ""
-        self.nanduses = 0
         self.n_contaminants = 0
         self.aoiraster = ""
         self.LUTcolours = ['']
@@ -360,6 +359,7 @@ class LandUseShp():
         copy the shape file to output file path
         """
         # check if dirname exists, if not create it
+        print "Shape file copied to :", self.copyfilepath
         dest_dir=os.path.dirname(self.copyfilepath)
         if not os.path.exists(dest_dir):
             print dest_dir
@@ -445,33 +445,48 @@ class LandUseShp():
                     (raster.extent[0], raster.extent[3]), yres, yres)
         else: return raster
 
+class ZielWerte():
+    """
+    Class to hold all the values from Zielwert.rtv
+    """
+    def __init__(self,proj):
+        n_Landuses=proj.n_landuses
+        try:
+            infile_target =  'Zielwertset.rtv'
+            infile_target = os.path.abspath(proj.aktscenario)+'/'+infile_target
+            targetreader = csv.reader(open(infile_target, "r"))
+        except IOError:
+            print "Error: Could not find 'Zielwertset.rtv' under " \
+            , os.path.abspath(aktscenario) 
+            sys.exit(1)
+        self.contnames = []
+        self.compartments = []
+        self.targets_LUT=[]
+        self.contrasternames = []
+        self.boolConflictType = []
+        self.iContRealisations = []
+        self.no_contaminants = int(targetreader.next()[0])
+        print 'Anzahl Kontaminanten (B und GW): ', self.no_contaminants
+        for row in targetreader:
+            self.contnames.append(row[0])
+            self.compartments.append(row[1])
+            self.targets_LUT.append(row[2:n_Landuses+2])
+            self.contrasternames.append(row[n_Landuses+2])
+            self.boolConflictType.append(row[n_Landuses+3])
+            self.iContRealisations.append(row[n_Landuses +4])
+        #print self.contnames 
+        #print self.compartments
+        #print self.contrasternames 
+        #print self.no_contaminants
+        #print self.targets_LUT 
+        #print self.boolConflictType
+        #print self.iContRealisations 
+        
 
-
-FILEPATH = "SzenarioA/ScALayout1.shp"
-A = LandUseShp(FILEPATH,"SzenarioA/ScALayout1/ScALayout1_bla.shp")
-A.addfield("Test")
-
-#A.rasterize(10, 10,"bls.asc")
-#FILEPATH = "SzenarioA/ScALayout2.shp"
-#A = LandUseShp(FILEPATH)
-#A.rasterize(10, 10,"scal2.asc")
-#print "a"
-#FILEPATH = "SzenarioB/ScBLayout1.shp"
-#A = LandUseShp(FILEPATH)
-#A.rasterize(10, 10,"scbl1.asc")
-#FILEPATH = "SzenarioB/ScBLayout2.shp"
-#A = LandUseShp(FILEPATH)
-#A.rasterize(10, 10,"sccl1.asc")
-#print "d"
-#FILEPATH = "SzenarioC/ScCLayout1.shp"
-#A = LandUseShp(FILEPATH)
-#A.rasterize(9, 9,"sccl1.asc")
-#A.rasterize(5, 5,"sccl15.asc")
-#FILEPATH = "SzenarioC/ScCLayout2.shp"
-#A = LandUseShp(FILEPATH)
-#A.rasterize(10, 10,"sccl2.asc")
-
-#sys.exit()
+if __name__ == "main":
+    FILEPATH = "SzenarioA/ScALayout1.shp"
+    A = LandUseShp(FILEPATH,"SzenarioA/ScALayout1/ScALayout1_bla.shp")
+    A.addfield("Test")
 
 #MAX TERMIN MONTAG 16:30 25.Juni
 
