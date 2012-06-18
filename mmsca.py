@@ -334,8 +334,10 @@ class LandUseShp():
         # driver.Open(path,0) -> open read only
         # driver.Open(path,1) -> open with update option
         if copyfile:
+            print "!!"
             self.copyfilepath=copyfile
-            self.dataSource = driver.Open(copyfilepath, 1)
+            self.createcopy()
+            self.dataSource = driver.Open(self.copyfilepath, 1)
         else: self.dataSource = driver.Open(shapefilepath, 0)
         self.layer = self.dataSource.GetLayer()
         self.NPolygons = self.layer.GetFeatureCount()
@@ -364,12 +366,13 @@ class LandUseShp():
         """
         # check if dirname exists, if not create it
         dest_dir=os.path.dirname(self.copyfilepath)
-        if not os.path.exits(os.path.dirname(dest_dir)):
+        if not os.path.exists(dest_dir):
+            print dest_dir
             os.makedirs(dest_dir)
-        suffixes = ['shp', 'shx' 'dbf']
+        suffixes = ['shp', 'shx',  'dbf']
         for suffix in suffixes:
-            shutil.copy2(self.filepath[:-3]+suffix,
-                self.copyfilepath[:-3]+suffix)
+            shutil.copy2(self.filepath.replace("shp", suffix),
+                 self.copyfilepath.replace("shp", suffix))
         
         
     def addfield(self,fieldname):
@@ -377,8 +380,8 @@ class LandUseShp():
         Add field to attribute table
         """
         driver = ogr.GetDriverByName('ESRI Shapefile')
-        
         print "bla"
+        
     def rasterize(self, xres, yres, rasterfilepath=None):
         """
         raster object does not needs to be created outside
@@ -394,11 +397,9 @@ class LandUseShp():
         for boundary, code in zip(self.Boundaries, self.Codes):
             vmask = nxutils.points_inside_poly(raster.rasterpoints, boundary)
             raster.mask = np.column_stack([vmask, vmask])
-            
             #deleted_indexes=np.where(raster.mask==True)
             #raster.rasterpoints=np.delete(raster.rasterpoints, 
             #                        np.where(raster.mask==True),0)
-            
             raster.rasterpoints = np.ma.array(raster.rasterpoints, 
                     mask = raster.mask, fill_value = [0, 0])
             vmask = vmask*code
@@ -409,10 +410,9 @@ class LandUseShp():
             raster.rasterpoints = raster.rasterpoints.filled()
             # insert to deleted indecies bogus points so next time
             # raster.mask is the same size as the previous step
-            
         if rasterfilepath:
             """
-            PROBLEM: This still lives 0 intead of no data"
+            PROBLEM?: This still lives 0 intead of no data"
             """
             raster.data.resize(raster.Yrange.size, raster.Xrange.size)
             #raster.data.reshape(X)
@@ -425,26 +425,26 @@ class LandUseShp():
 
 
 FILEPATH = "SzenarioA/ScALayout1.shp"
-A = LandUseShp(FILEPATH)
-A.rasterize(10, 10,"bls.asc")
-FILEPATH = "SzenarioA/ScALayout2.shp"
-A = LandUseShp(FILEPATH)
-A.rasterize(10, 10,"scal2.asc")
-print "a"
-FILEPATH = "SzenarioB/ScBLayout1.shp"
-A = LandUseShp(FILEPATH)
-A.rasterize(10, 10,"scbl1.asc")
-FILEPATH = "SzenarioB/ScBLayout2.shp"
-A = LandUseShp(FILEPATH)
-A.rasterize(10, 10,"sccl1.asc")
-print "d"
-FILEPATH = "SzenarioC/ScCLayout1.shp"
-A = LandUseShp(FILEPATH)
-A.rasterize(9, 9,"sccl1.asc")
-A.rasterize(5, 5,"sccl15.asc")
-FILEPATH = "SzenarioC/ScCLayout2.shp"
-A = LandUseShp(FILEPATH)
-A.rasterize(10, 10,"sccl2.asc")
+A = LandUseShp(FILEPATH,"SzenarioA/ScALayout1/ScALayout1_bla.shp")
+#A.rasterize(10, 10,"bls.asc")
+#FILEPATH = "SzenarioA/ScALayout2.shp"
+#A = LandUseShp(FILEPATH)
+#A.rasterize(10, 10,"scal2.asc")
+#print "a"
+#FILEPATH = "SzenarioB/ScBLayout1.shp"
+#A = LandUseShp(FILEPATH)
+#A.rasterize(10, 10,"scbl1.asc")
+#FILEPATH = "SzenarioB/ScBLayout2.shp"
+#A = LandUseShp(FILEPATH)
+#A.rasterize(10, 10,"sccl1.asc")
+#print "d"
+#FILEPATH = "SzenarioC/ScCLayout1.shp"
+#A = LandUseShp(FILEPATH)
+#A.rasterize(9, 9,"sccl1.asc")
+#A.rasterize(5, 5,"sccl15.asc")
+#FILEPATH = "SzenarioC/ScCLayout2.shp"
+#A = LandUseShp(FILEPATH)
+#A.rasterize(10, 10,"sccl2.asc")
 
 #sys.exit()
 
