@@ -268,10 +268,6 @@ class MaskRaster(ASCIIRaster):
     test.Writer("test_mask.asc", test.mask, (test.extent[0], test.extent[3]),10,10)
     print "finished in:", time.time() - a , "sec"
     """
-    
-    
-    
-    
     def getareaofinterest(self, aoi_shp_file):
         """
         Read a shape file containing a a single polygon bounding an area of interest.
@@ -334,7 +330,6 @@ class LandUseShp():
         # driver.Open(path,0) -> open read only
         # driver.Open(path,1) -> open with update option
         if copyfile:
-            print "!!"
             self.copyfilepath=copyfile
             self.createcopy()
             self.dataSource = driver.Open(self.copyfilepath, 1)
@@ -373,14 +368,42 @@ class LandUseShp():
         for suffix in suffixes:
             shutil.copy2(self.filepath.replace("shp", suffix),
                  self.copyfilepath.replace("shp", suffix))
-        
-        
     def addfield(self,fieldname):
         """
         Add field to attribute table
         """
-        driver = ogr.GetDriverByName('ESRI Shapefile')
-        print "bla"
+        field_TEXT  = ogr.FieldDefn(fieldname, ogr.OFTString) 
+        field_TEXT.SetWidth(20)
+        self.layer.CreateField(field_TEXT)
+        rslt=self.layer.SyncToDisk()
+        if rslt != 0:
+            print "Error: Could not write new feature ", fieldname , \
+                " to attribute table of ", self.copyfilepath
+            sys.exit(1)
+            
+    def setvalues(self, fieldname ,value):
+        """
+        Set the property of a polygon.
+        This function should  be used inside a loop, since 
+        we iterate over the polygon, for example:
+        In [42]: A.__class__
+        Out[42]: mmsca.LandUseShp
+        In [43]: for i in range(A.layer.GetFeatureCount()):
+            A.setthresholds("Test", 222+i)
+        This will set for each polygon the field "Test" to 222+i.
+        """
+        feature=self.layer.GetNextFeature()
+        if feature:
+            idx=feature.GetFieldIndex(fieldname)
+            feature.SetField2(idx,value)
+            self.layer.SetFeature(feature)
+            self.layer.SyncToDisk()
+        #feature=self.layer.GetNextFeature()
+        else:
+            #re-read features ...
+            #self.layer.ResetReading()
+            return None
+            
         
     def rasterize(self, xres, yres, rasterfilepath=None):
         """
@@ -426,6 +449,8 @@ class LandUseShp():
 
 FILEPATH = "SzenarioA/ScALayout1.shp"
 A = LandUseShp(FILEPATH,"SzenarioA/ScALayout1/ScALayout1_bla.shp")
+A.addfield("Test")
+
 #A.rasterize(10, 10,"bls.asc")
 #FILEPATH = "SzenarioA/ScALayout2.shp"
 #A = LandUseShp(FILEPATH)
