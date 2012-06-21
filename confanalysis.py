@@ -26,7 +26,7 @@ This is the main script that runs the conflict analysis.
 most of the functios are in the module mmsca.py
 """
 import stat,sys,os,shutil 
-
+import mmsca
 
 def parseArgs():
     """
@@ -35,14 +35,14 @@ def parseArgs():
     - Verify that conflict type is specified.  
     """
     if not os.path.isdir(sys.argv[1]):
-        print "ERROR: The first argument must be a directory which holds the" \
-        + " Projekt.ini"
+        print "ERROR: The first argument must be a directory which " \
+        + "holds the Projekt.ini"
         sys.exit(1)
     try:
-        open(os.path.abspath(sys.argv[1])+'/Projekt.ini')
+        open(os.path.abspath(sys.argv[1])+'/DATA/Projekt.ini')
     except IOError:
         print "ERROR: Could not find the Projekt.ini under " \
-        + os.path.abspath(sys.argv[1])
+        + os.path.abspath(sys.argv[1])+'/DATA/'
     try: 
         conflicttype = sys.argv[2]
         try: 
@@ -53,10 +53,35 @@ def parseArgs():
     except IndexError:      
         print "ERROR: You didn't specify conflict type."
         sys.exit(1)
+    return conflicttype
 
-def main():
-    print "main."
 
+def main(conflicttype):
+    #initialize all project properties
+    workdir=sys.argv[1]
+    proj =  mmsca.Project()
+    proj.getconfig(os.path.abspath(workdir)+"/DATA/Projekt.ini")
+    proj.cleanup()
+    print proj.aktscenario, proj.aktlayout
+    layout = proj.aktscenario+'/'+proj.aktlayout+'.shp'
+    layout_tgl = proj.aktscenario+'/'+proj.aktlayout+'/' \
+        +proj.aktlayout+'_tgl'+'.shp'
+    zwert = mmsca.ZielWerte(proj)
+    #create shape file object and rasterize the layers
+    scenario = mmsca.LandUseShp(layout,layout_tgl)
+    xres, yres = 10, 10 
+    luraster =  proj.aktscenario+'/'+proj.aktlayout+'/'+proj.aktlayout+'.asc'
+    print "Land Uses Raster created in: ", os.path.abspath(luraster)
+    scenario.rasterize(xres, yres,os.path.abspath(luraster))
+    #
 if __name__ == '__main__':
-    parseArgs()
-    main()
+    conflicttype=parseArgs()
+    main(conflicttype)
+
+#usage:
+#:~/Desktop/PROJECT_MMSpy/Projekt$ ./confanalysis.py . 0
+# output:
+#conflicttype  0
+#SzenarioA ScALayout1
+#Shape file copied to : SzenarioA/ScALayout1/ScALayout1_tgl.shp
+#Anzahl Kontaminanten (B und GW):  4

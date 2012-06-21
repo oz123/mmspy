@@ -426,7 +426,6 @@ class LandUseShp():
             raster.rasterpoints = np.ma.array(raster.rasterpoints, 
                     mask = raster.mask, fill_value = [0, 0])
             vmask = vmask*code
-            print vmask.shape
             #raster.mask = np.ma.masked_equal(raster.mask, 0)
             #raster.mask.set_fill_value(-9999)
             raster.data = raster.data + vmask
