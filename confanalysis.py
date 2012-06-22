@@ -57,7 +57,7 @@ def parseArgs():
 
 
 def main(conflicttype):
-    #initialize all project properties
+    # initialize all project properties
     workdir=sys.argv[1]
     proj =  mmsca.Project()
     proj.getconfig(os.path.abspath(workdir)+"/DATA/Projekt.ini")
@@ -67,13 +67,31 @@ def main(conflicttype):
     layout_tgl = proj.aktscenario+'/'+proj.aktlayout+'/' \
         +proj.aktlayout+'_tgl'+'.shp'
     zwert = mmsca.ZielWerte(proj)
-    #create shape file object and rasterize the layers
+    # create shape file object , since we specify a copy
+    # all further actions are preformed on the copy with _tgl suffix
     scenario = mmsca.LandUseShp(layout,layout_tgl)
     xres, yres = 10, 10 
     luraster =  proj.aktscenario+'/'+proj.aktlayout+'/'+proj.aktlayout+'.asc'
     print "Land Uses Raster created in: ", os.path.abspath(luraster)
+    # rasterize the layers
     scenario.rasterize(xres, yres,os.path.abspath(luraster))
-    #
+    
+    # add column for each contaminant 
+    for contaminant, component in zip(zwert.contnames, zwert.compartments):
+        print contaminant, component
+        if component == "Boden":  scenario.addfield(contaminant+"_B")
+        elif component == "GW": scenario.addfield(contaminant+"_in_GW")
+         
+    # for each polygon fill in the allowed threshold for each contaminant
+    # based on the land use code
+    for polygon in range(scenario.NPolygons):
+        luc = scenario.get_value("Kategorie")
+        # land use code range is from 100 to 900 which translates
+        # to 1st or 9th column in allowed thresholds in zwert 
+        
+    import pdb
+    pdb.set_trace()
+    
 if __name__ == '__main__':
     conflicttype=parseArgs()
     main(conflicttype)
