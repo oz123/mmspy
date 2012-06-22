@@ -368,6 +368,7 @@ class LandUseShp():
         for suffix in suffixes:
             shutil.copy2(self.filepath.replace("shp", suffix),
                  self.copyfilepath.replace("shp", suffix))
+    
     def addfield(self,fieldname):
         """
         Add field to attribute table
@@ -380,12 +381,29 @@ class LandUseShp():
             print "Error: Could not write new feature ", fieldname , \
                 " to attribute table of ", self.copyfilepath
             sys.exit(1)
-            
-    def setvalues(self, fieldname ,value):
+    
+    def get_value(self, fieldname):
+        """
+        Get the value of a polygon.
+        This function should  be used inside a loop, since 
+        we iterate over the polygons, for example:
+        """
+        feature=self.layer.GetNextFeature()
+        if feature:
+            idx=feature.GetFieldIndex(fieldname)
+            value=feature.GetField(idx)
+            return value
+        # when no more features are available
+        else:
+            #re-read features ...
+            self.layer.ResetReading()
+            return None
+                
+    def set_value(self, fieldname ,value):
         """
         Set the property of a polygon.
         This function should  be used inside a loop, since 
-        we iterate over the polygon, for example:
+        we iterate over the polygons, for example:
         In [42]: A.__class__
         Out[42]: mmsca.LandUseShp
         In [43]: for i in range(A.layer.GetFeatureCount()):
@@ -398,14 +416,52 @@ class LandUseShp():
             feature.SetField2(idx,value)
             self.layer.SetFeature(feature)
             self.layer.SyncToDisk()
-        #feature=self.layer.GetNextFeature()
+        # when no more features are available
         else:
             #re-read features ...
-            #self.layer.ResetReading()
+            self.layer.ResetReading()
             return None
             
-        
     def rasterize(self, xres, yres, rasterfilepath=None):
+        """
+        raster object does not needs to be created outside
+        """
+        raster = MaskRaster()
+        raster.extent = self.layer.GetExtent()
+        raster.xllcorner = raster.extent[0]
+        raster.yllcorner = raster.extent[2]
+        raster.xurcorner = raster.extent[1] 
+        raster.yurcorner = raster.extent[3]
+        raster.fillrasterpoints(xres, yres)
+        raster.data = np.zeros(raster.rasterpoints.shape[0])
+        for boundary, code in zip(self.Boundaries, self.Codes):
+            vmask = nxutils.points_inside_poly(raster.rasterpoints, boundary)
+            raster.mask = np.column_stack([vmask, vmask])
+            #deleted_indexes=np.where(raster.mask==True)
+            #raster.rasterpoints=np.delete(raster.rasterpoints, 
+            #                        np.where(raster.mask==True),0)
+            raster.rasterpoints = np.ma.array(raster.rasterpoints, 
+                    mask = raster.mask, fill_value = [0, 0])
+            vmask = vmask*code
+            #raster.mask = np.ma.masked_equal(raster.mask, 0)
+            #raster.mask.set_fill_value(-9999)
+            raster.data = raster.data + vmask
+            raster.rasterpoints = raster.rasterpoints.filled()
+            # insert to deleted indecies bogus points so next time
+            # raster.mask is the same size as the previous step
+        if rasterfilepath:
+            """
+            PROBLEM?: This still lives 0 intead of no data"
+            """
+            raster.data.resize(raster.Yrange.size, raster.Xrange.size)
+            #raster.data.reshape(X)
+            raster.data = np.flipud(raster.data)
+            np.putmask(raster.data, raster.data == 0, -9999)
+            raster.writer(rasterfilepath, raster.data, 
+                    (raster.extent[0], raster.extent[3]), yres, yres)
+        else: return raster
+        
+    def rasterize_filled(self, xres, yres, field="Land",rasterfilepath=None):
         """
         raster object does not needs to be created outside
         """
@@ -446,7 +502,11 @@ class LandUseShp():
 
 class ZielWerte():
     """
-    Class to hold all the values from Zielwert.rtv
+    Class to hold all the values from Zielwert.rtv.
+    self.landuses describes the columns in the file, 
+    these match one possible land uses in the shape-file.
+    Feel free to change, but don't complain if your shape-files
+    contain "Category" and this class contains "Kategorie".
     """
     def __init__(self,proj):
         n_Landuses=proj.n_landuses
@@ -460,16 +520,27 @@ class ZielWerte():
             sys.exit(1)
         self.contnames = []
         self.compartments = []
-        self.targets_LUT=[]
+        self.targets_LUT={}
         self.contrasternames = []
         self.boolConflictType = []
         self.iContRealisations = []
+        
+        # landuses describes the columns in the file, 
+        # This match one possible land uses in the shape-file.
+        # Feel free to change, but don't complain if your shape-files
+        # contain "Category" and this class contains "Kategorie".
+        
+        self.landuses = [ "Wohnen", "Gewerbe (nicht sensibel)", 
+        "Gewerbe (sensibel)","Renaturierung", "Akerland/Forst",
+        "Freizeit und Erholung", "Stadtpark", "Gruenriegel",
+        "Gruenpuffer" ]
         self.no_contaminants = int(targetreader.next()[0])
         print 'Anzahl Kontaminanten (B und GW): ', self.no_contaminants
+        # do the actual parsing of the file
         for row in targetreader:
             self.contnames.append(row[0])
             self.compartments.append(row[1])
-            self.targets_LUT.append(row[2:n_Landuses+2])
+            self.targets_LUT[row[0]]=row[2:n_Landuses+2]
             self.contrasternames.append(row[n_Landuses+2])
             self.boolConflictType.append(row[n_Landuses+3])
             self.iContRealisations.append(row[n_Landuses +4])
