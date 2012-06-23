@@ -34,6 +34,9 @@ def parseArgs():
     - Verify the Projekt.ini exists.
     - Verify that conflict type is specified.  
     """
+    if len(sys.argv) < 2:
+        print "No arguments given ... quiting ..."
+        sys.exit(1)
     if not os.path.isdir(sys.argv[1]):
         print "ERROR: The first argument must be a directory which " \
         + "holds the Projekt.ini"
@@ -75,22 +78,35 @@ def main(conflicttype):
     print "Land Uses Raster created in: ", os.path.abspath(luraster)
     # rasterize the layers
     scenario.rasterize(xres, yres,os.path.abspath(luraster))
-    
     # add column for each contaminant 
     for contaminant, component in zip(zwert.contnames, zwert.compartments):
         print contaminant, component
         if component == "Boden":  scenario.addfield(contaminant+"_B")
         elif component == "GW": scenario.addfield(contaminant+"_in_GW")
-         
     # for each polygon fill in the allowed threshold for each contaminant
     # based on the land use code
+    scenario.layer.ResetReading()
     for polygon in range(scenario.NPolygons):
-        luc = scenario.get_value("Kategorie")
-        # land use code range is from 100 to 900 which translates
-        # to 1st or 9th column in allowed thresholds in zwert 
+        pol = scenario.layer.GetNextFeature()
+        luc = scenario.get_value(pol, "Kategorie")
+        # land uses code range is from 100 to 900 which translates
+        # to 1st or 9th column in allowed thresholds in zwert
+        # keep in mind, column indecies start from ... 
+        luc = (int(luc) / 100) - 1
+        print luc
+        #print "f",scenario.fields[3:]
+        #print "c ",zwert.contnames
+        #print "k ",zwert.targets_LUT.keys()
+        for field, contname in zip(scenario.fields[3:],
+            zwert.contnames):
+            values=zwert.targets_LUT[contname]
+            value=values[luc]
+            scenario.set_value(pol, field, value)
+        #for contmaninant in zwert.contnames:
+        #    cidx = 
         
-    import pdb
-    pdb.set_trace()
+    #import pdb
+    #pdb.set_trace()
     
 if __name__ == '__main__':
     conflicttype=parseArgs()

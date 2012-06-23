@@ -326,6 +326,7 @@ class LandUseShp():
         self.LandUses = []
         self.Codes = [] #Store Categories
         self.NPolygons = 1 # number of polygons in layer
+        self.fields = []
         # driver.Open(path,0) -> open read only
         # driver.Open(path,1) -> open with update option
         if copyfile:
@@ -337,6 +338,9 @@ class LandUseShp():
         self.NPolygons = self.layer.GetFeatureCount()
         # store vertices of each polygon      
         self.Boundaries = [""]*self.NPolygons   
+        feature=self.layer.GetFeature(0)
+        self.fields = feature.keys()
+        self.layer.ResetReading()
         for polygon in range(self.NPolygons):
             area = self.layer.GetFeature(polygon)
             name = area.GetField(0)
@@ -377,29 +381,41 @@ class LandUseShp():
         field_TEXT.SetWidth(20)
         self.layer.CreateField(field_TEXT)
         rslt=self.layer.SyncToDisk()
+        
         if rslt != 0:
             print "Error: Could not write new feature ", fieldname , \
                 " to attribute table of ", self.copyfilepath
             sys.exit(1)
-    
-    def get_value(self, fieldname):
+        self.fields.append(fieldname)
+        
+    def get_value(self, feature, fieldname):
         """
         Get the value of a polygon.
         This function should  be used inside a loop, since 
         we iterate over the polygons, for example:
         """
-        feature=self.layer.GetNextFeature()
-        if feature:
-            idx=feature.GetFieldIndex(fieldname)
-            value=feature.GetField(idx)
-            return value
+        #feature=self.layer.GetNextFeature()
+        #if feature:
+        #    idx=feature.GetFieldIndex(fieldname)
+        #    value=feature.GetField(idx)
+        #    return value
         # when no more features are available
-        else:
-            #re-read features ...
-            self.layer.ResetReading()
-            return None
+        #else:
+        #    #re-read features ...
+        #    self.layer.ResetReading()
+        #    return None
+        #feature=self.layer.GetNextFeature()
+        #if feature:
+        idx=feature.GetFieldIndex(fieldname)
+        value=feature.GetField(idx)
+        return value
+        # when no more features are available
+        #else:
+        #    #re-read features ...
+        #    self.layer.ResetReading()
+        #   return None
                 
-    def set_value(self, fieldname ,value):
+    def set_value(self, feature, fieldname ,value):
         """
         Set the property of a polygon.
         This function should  be used inside a loop, since 
@@ -410,17 +426,24 @@ class LandUseShp():
             A.setthresholds("Test", 222+i)
         This will set for each polygon the field "Test" to 222+i.
         """
-        feature=self.layer.GetNextFeature()
-        if feature:
-            idx=feature.GetFieldIndex(fieldname)
-            feature.SetField2(idx,value)
-            self.layer.SetFeature(feature)
-            self.layer.SyncToDisk()
+        #feature=self.layer.GetNextFeature()
+        #if feature:
+        idx=feature.GetFieldIndex(fieldname)
+        feature.SetField2(idx,value)
+        self.layer.SetFeature(feature)
+        self.layer.SyncToDisk()
+        print "set ", fieldname, "to ", value
+        #if feature:
+        #idx=feature.GetFieldIndex(fieldname)
+        #feature.SetField2(idx,value)
+        #self.layer.SetFeature(feature)
+        #self.layer.SyncToDisk()
+        #print "set ", fieldname, "to ", value
         # when no more features are available
-        else:
+        #else:
             #re-read features ...
-            self.layer.ResetReading()
-            return None
+            #self.layer.ResetReading()
+        #    return None
             
     def rasterize(self, xres, yres, rasterfilepath=None):
         """
