@@ -412,47 +412,8 @@ class LandUseShp():
         self.layer.SetFeature(feature)
         self.layer.SyncToDisk()
         #print "set ", fieldname, "to ", value
-            
-    def rasterize(self, xres, yres, rasterfilepath=None):
-        """
-        raster object does not needs to be created outside
-        """
-        raster = MaskRaster()
-        raster.extent = self.layer.GetExtent()
-        raster.xllcorner = raster.extent[0]
-        raster.yllcorner = raster.extent[2]+yres
-        raster.xurcorner = raster.extent[1] 
-        raster.yurcorner = raster.extent[3]
-        raster.fillrasterpoints(xres, yres)
-        raster.data = np.zeros(raster.rasterpoints.shape[0])
-        for boundary, code in zip(self.Boundaries, self.Codes):
-            vmask = nxutils.points_inside_poly(raster.rasterpoints, boundary)
-            raster.mask = np.column_stack([vmask, vmask])
-            #deleted_indexes=np.where(raster.mask==True)
-            #raster.rasterpoints=np.delete(raster.rasterpoints, 
-            #                        np.where(raster.mask==True),0)
-            raster.rasterpoints = np.ma.array(raster.rasterpoints, 
-                    mask = raster.mask, fill_value = [0, 0])
-            vmask = vmask*code
-            #raster.mask = np.ma.masked_equal(raster.mask, 0)
-            #raster.mask.set_fill_value(-9999)
-            raster.data = raster.data + vmask
-            raster.rasterpoints = raster.rasterpoints.filled()
-            # insert to deleted indecies bogus points so next time
-            # raster.mask is the same size as the previous step
-        if rasterfilepath:
-            """
-            PROBLEM?: This still lives 0 intead of no data"
-            """
-            raster.data.resize(raster.Yrange.size, raster.Xrange.size)
-            #raster.data.reshape(X)
-            raster.data = np.flipud(raster.data)
-            np.putmask(raster.data, raster.data == 0, -9999)
-            raster.writer(rasterfilepath, raster.data, 
-                    (raster.extent[0], raster.extent[3]), yres, yres)
-        else: return raster
         
-    def rasterize_field(self, xres, yres, field="Land",rasterfilepath=None):
+    def rasterize_field(self, xres, yres, fieldname="Kategorie",rasterfilepath=None):
         """
         This function creates a raster image of the polygons, based
         on one of the database field (the field has to be numeric). 
@@ -460,13 +421,17 @@ class LandUseShp():
         raster = MaskRaster()
         raster.extent = self.layer.GetExtent()
         raster.xllcorner = raster.extent[0]
-        raster.yllcorner = raster.extent[2]+yres
+        raster.yllcorner = raster.extent[2]
         raster.xurcorner = raster.extent[1] 
         raster.yurcorner = raster.extent[3]
         raster.fillrasterpoints(xres, yres)
         raster.data = np.zeros(raster.rasterpoints.shape[0])
-        
-        for boundary, code in zip(self.Boundaries, self.Codes):
+        values = [0]*len(self.Codes)
+        for polygon in range(self.NPolygons):
+            feature = self.layer.GetFeature(polygon)
+            values[polygon] = int(self.get_value(feature, fieldname))
+        self.layer.ResetReading()
+        for boundary, code in zip(self.Boundaries, values):
             vmask = nxutils.points_inside_poly(raster.rasterpoints, boundary)
             raster.mask = np.column_stack([vmask, vmask])
             #deleted_indexes=np.where(raster.mask==True)
@@ -490,7 +455,7 @@ class LandUseShp():
             raster.data = np.flipud(raster.data)
             np.putmask(raster.data, raster.data == 0, -9999)
             raster.writer(rasterfilepath, raster.data, 
-                    (raster.extent[0], raster.extent[3]), yres, yres)
+                    (raster.extent[0], raster.extent[3]+yres), yres, yres)
         else: return raster
 
 class ZielWerte():
