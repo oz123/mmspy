@@ -59,7 +59,31 @@ def parseArgs():
     return conflicttype
 
 
+
+def populateShpfileDbase(shpfile,zwerts):
+    """
+    Populate the database of the shapefile with allowed contaminants 
+    thresholds for each land use.
+    """
+    for polygon in range(shpfile.NPolygons):
+        pol = shpfile.layer.GetNextFeature()
+        luc = shpfile.get_value(pol, "Kategorie")
+        # land uses code range is from 100 to 900 which translates
+        # to 1st or 9th column in allowed thresholds in zwert
+        # keep in mind, column indecies start from 0 ... 
+        luc = (int(luc) / 100) - 1
+        for field, contname in zip(shpfile.fields[3:],
+            zwerts.contnames):
+            values=zwerts.targets_LUT[contname]
+            value=values[luc]
+            shpfile.set_value(pol, field, value)
+    shpfile.layer.ResetReading()
+
 def main(conflicttype):
+    """
+    The main algorithm that drives the conflict analysis.
+    """
+    
     # initialize all project properties
     workdir=sys.argv[1]
     proj =  mmsca.Project()
@@ -80,31 +104,15 @@ def main(conflicttype):
     scenario.rasterize(xres, yres,os.path.abspath(luraster))
     # add column for each contaminant 
     for contaminant, component in zip(zwert.contnames, zwert.compartments):
-        print contaminant, component
+        #print contaminant, component
         if component == "Boden":  scenario.addfield(contaminant+"_B")
         elif component == "GW": scenario.addfield(contaminant+"_in_GW")
     # for each polygon fill in the allowed threshold for each contaminant
     # based on the land use code
     scenario.layer.ResetReading()
-    for polygon in range(scenario.NPolygons):
-        pol = scenario.layer.GetNextFeature()
-        luc = scenario.get_value(pol, "Kategorie")
-        # land uses code range is from 100 to 900 which translates
-        # to 1st or 9th column in allowed thresholds in zwert
-        # keep in mind, column indecies start from ... 
-        luc = (int(luc) / 100) - 1
-        print luc
-        #print "f",scenario.fields[3:]
-        #print "c ",zwert.contnames
-        #print "k ",zwert.targets_LUT.keys()
-        for field, contname in zip(scenario.fields[3:],
-            zwert.contnames):
-            values=zwert.targets_LUT[contname]
-            value=values[luc]
-            scenario.set_value(pol, field, value)
-        #for contmaninant in zwert.contnames:
-        #    cidx = 
-        
+    populateShpfileDbase(scenario,zwert)
+    # create a raster of thresholds for each contaminant
+      
     #import pdb
     #pdb.set_trace()
     

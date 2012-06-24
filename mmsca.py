@@ -390,31 +390,12 @@ class LandUseShp():
         
     def get_value(self, feature, fieldname):
         """
-        Get the value of a polygon.
-        This function should  be used inside a loop, since 
-        we iterate over the polygons, for example:
+        Get the field value of a polygon.
         """
-        #feature=self.layer.GetNextFeature()
-        #if feature:
-        #    idx=feature.GetFieldIndex(fieldname)
-        #    value=feature.GetField(idx)
-        #    return value
-        # when no more features are available
-        #else:
-        #    #re-read features ...
-        #    self.layer.ResetReading()
-        #    return None
-        #feature=self.layer.GetNextFeature()
-        #if feature:
         idx=feature.GetFieldIndex(fieldname)
         value=feature.GetField(idx)
         return value
-        # when no more features are available
-        #else:
-        #    #re-read features ...
-        #    self.layer.ResetReading()
-        #   return None
-                
+
     def set_value(self, feature, fieldname ,value):
         """
         Set the property of a polygon.
@@ -424,26 +405,13 @@ class LandUseShp():
         Out[42]: mmsca.LandUseShp
         In [43]: for i in range(A.layer.GetFeatureCount()):
             A.setthresholds("Test", 222+i)
-        This will set for each polygon the field "Test" to 222+i.
+        This will set  the polygon field "Test" to 222+i.
         """
-        #feature=self.layer.GetNextFeature()
-        #if feature:
         idx=feature.GetFieldIndex(fieldname)
         feature.SetField2(idx,value)
         self.layer.SetFeature(feature)
         self.layer.SyncToDisk()
-        print "set ", fieldname, "to ", value
-        #if feature:
-        #idx=feature.GetFieldIndex(fieldname)
-        #feature.SetField2(idx,value)
-        #self.layer.SetFeature(feature)
-        #self.layer.SyncToDisk()
         #print "set ", fieldname, "to ", value
-        # when no more features are available
-        #else:
-            #re-read features ...
-            #self.layer.ResetReading()
-        #    return None
             
     def rasterize(self, xres, yres, rasterfilepath=None):
         """
@@ -452,7 +420,7 @@ class LandUseShp():
         raster = MaskRaster()
         raster.extent = self.layer.GetExtent()
         raster.xllcorner = raster.extent[0]
-        raster.yllcorner = raster.extent[2]
+        raster.yllcorner = raster.extent[2]+yres
         raster.xurcorner = raster.extent[1] 
         raster.yurcorner = raster.extent[3]
         raster.fillrasterpoints(xres, yres)
@@ -484,18 +452,20 @@ class LandUseShp():
                     (raster.extent[0], raster.extent[3]), yres, yres)
         else: return raster
         
-    def rasterize_filled(self, xres, yres, field="Land",rasterfilepath=None):
+    def rasterize_field(self, xres, yres, field="Land",rasterfilepath=None):
         """
-        raster object does not needs to be created outside
+        This function creates a raster image of the polygons, based
+        on one of the database field (the field has to be numeric). 
         """
         raster = MaskRaster()
         raster.extent = self.layer.GetExtent()
         raster.xllcorner = raster.extent[0]
-        raster.yllcorner = raster.extent[2]
+        raster.yllcorner = raster.extent[2]+yres
         raster.xurcorner = raster.extent[1] 
         raster.yurcorner = raster.extent[3]
         raster.fillrasterpoints(xres, yres)
         raster.data = np.zeros(raster.rasterpoints.shape[0])
+        
         for boundary, code in zip(self.Boundaries, self.Codes):
             vmask = nxutils.points_inside_poly(raster.rasterpoints, boundary)
             raster.mask = np.column_stack([vmask, vmask])
