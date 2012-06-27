@@ -27,7 +27,7 @@ most of the functios are in the module mmsca.py
 """
 import stat,sys,os,shutil 
 import mmsca
-
+import numpy as np
 def parseArgs():
     """
     Do some basic checks about the command line arguments.
@@ -94,30 +94,63 @@ def main(conflicttype):
     layout_tgl = proj.aktscenario+'/'+proj.aktlayout+'/' \
         +proj.aktlayout+'_tgl'+'.shp'
     zwert = mmsca.ZielWerte(proj)
+    
     # create shape file object , since we specify a copy
     # all further actions are preformed on the copy with _tgl suffix
     scenario = mmsca.LandUseShp(layout,layout_tgl)
     xres, yres = 10, 10 
     luraster =  proj.aktscenario+'/'+proj.aktlayout+'/'+proj.aktlayout+'.asc'
+    
     # rasterize the layers
-    scenario.rasterize_field(xres, yres, rasterfilepath=os.path.abspath(luraster))
+    layout_raster=scenario.rasterize_field(xres, yres, rasterfilepath=os.path.abspath(luraster))
     print "Land Uses Raster created in: ", os.path.abspath(luraster)
+    print layout_raster
     # add column for each contaminant 
     for contaminant, component in zip(zwert.contnames, zwert.compartments):
         #print contaminant, component
         if component == "Boden":  scenario.addfield(contaminant+"_B")
         elif component == "GW": scenario.addfield(contaminant+"_in_GW")
+    
     # for each polygon fill in the allowed threshold for each contaminant
     # based on the land use code
     scenario.layer.ResetReading()
     populateShpfileDbase(scenario,zwert)
+    
     # create a raster of thresholds for each contaminant
     traster =  proj.aktscenario+'/'+proj.aktlayout+'/'+'target_'
+    targets = []
     for field, contname in zip(scenario.fields[3:],
             zwert.contnames):
-        scenario.rasterize_field(10,10,fieldname=field, 
-        rasterfilepath=traster+contname+'.asc')
+        targets.append(scenario.rasterize_field(xres,yres,fieldname=field, 
+        rasterfilepath=traster+contname+'.asc'))
         print "Target Raster created in: ", os.path.abspath(traster+contname+'.asc')
+        targets.append
+    
+    # clip each pollution raster so it is in the size of our masks
+    craster = mmsca.MaskRaster()
+    craster.reader("DATA/PCE_in_gw.asc")
+    craster.fillrasterpoints(xres, yres)
+    craster.getareaofinterest("DATA/area_of_interest.shp")
+    # need to claculate the bounding vertices of the extent, 
+    # then clip the raster ... 
+    craster.clip2()
+    # after that clip the points out of the bounding vertices
+    # craster.getmask(craster.boundingvertices)
+    # clip valid points
+    # print type(craster.mask)
+    craster.mask = craster.mask * 1
+    craster.mask.resize(craster.Yrange.size, craster.Xrange.size)
+    craster.mask = np.flipud(craster.mask)
+    #craster.data.resize(craster.Yrange.size, craster.Xrange.size)
+    #print craster.
+    craster.writer("test_mask.asc", craster.mask, (craster.extent[0], craster.extent[3]),10,10)    
+    #craster.writer("test_data.asc", craster.data, (craster.new_extent[0], craster.new_extent[3]),10,10)
+    #craster.data.resize(layout_raster.Yrange.size, layout_raster.Xrange.size)
+    #craster.writer("test_data_mod.asc", craster.data, (craster.new_extent[0], craster.new_extent[3]),10,10)
+    
+    # calculate exceedance for each raster
+    
+    #print targets
     #import pdb
     #pdb.set_trace()
     
