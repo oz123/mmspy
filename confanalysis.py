@@ -28,6 +28,7 @@ most of the functios are in the module mmsca.py
 import stat,sys,os,shutil 
 import mmsca
 import numpy as np
+
 def parseArgs():
     """
     Do some basic checks about the command line arguments.
@@ -79,6 +80,41 @@ def populateShpfileDbase(shpfile,zwerts):
             shpfile.set_value(pol, field, value)
     shpfile.layer.ResetReading()
 
+def clipPollutionRasters(proj,zwert):
+    """
+    Iterate over the list of pollution rasters and clip them using 
+    original demensions.
+    """
+    conts = {}
+    for i, (contraster,contname) in enumerate(zip(zwert.contrasternames, zwert.contnames)):
+    # clip each pollution raster so it is in the size of our masks
+        if i == 0:
+            craster = mmsca.MaskRaster()
+            craster.reader("DATA/"+contraster.replace('aux','asc'))
+            xres, yres = craster.extent[1], craster.extent[1]
+            craster.fillrasterpoints(xres, yres)
+            craster.getareaofinterest("DATA/area_of_interest.shp")
+            craster.clip2(new_extent_polygon=craster.boundingvertices)
+            area_of_interest_polygon=craster.boundingvertices
+            craster.data = np.ma.MaskedArray(craster.data, mask=craster.mask)
+            craster.data = np.ma.filled(craster.data, fill_value=-9999)
+            clipped = os.path.abspath( proj.aktscenario+'/'+proj.aktlayout+'/'+contname+'_clipped.asc')
+            craster.writer(clipped, craster.mask, (craster.extent[0], craster.extent[3]+yres*0.5),10,10)
+            print "Clipped Raster created in: ", clipped    
+            craster.writer(clipped, craster.data, (craster.extent[0], craster.extent[3]+yres*0.5),10,10,Flip=False)
+            conts[contname] = craster 
+        else:
+            craster.reader("DATA/"+contraster.replace('aux','asc'))
+            craster.clip2(new_extent_polygon=area_of_interest_polygon)
+            craster.data = np.ma.MaskedArray(craster.data, mask=craster.mask)
+            craster.data = np.ma.filled(craster.data, fill_value=-9999)
+            clipped = os.path.abspath( proj.aktscenario+'/'+proj.aktlayout+'/'+contname+'_clipped.asc')
+            craster.writer(clipped, craster.mask, (craster.extent[0], craster.extent[3]+yres*0.5),10,10)
+            print "Clipped Raster created in: ", clipped    
+            craster.writer(clipped, craster.data, (craster.extent[0], craster.extent[3]+yres*0.5),10,10,Flip=False)
+            conts[contname] = craster 
+    return conts
+    
 def main(conflicttype):
     """
     The main algorithm that drives the conflict analysis.
@@ -100,11 +136,9 @@ def main(conflicttype):
     scenario = mmsca.LandUseShp(layout,layout_tgl)
     xres, yres = 10, 10 
     luraster =  proj.aktscenario+'/'+proj.aktlayout+'/'+proj.aktlayout+'.asc'
-    
     # rasterize the layers
     layout_raster=scenario.rasterize_field(xres, yres, rasterfilepath=os.path.abspath(luraster))
     print "Land Uses Raster created in: ", os.path.abspath(luraster)
-    print layout_raster
     # add column for each contaminant 
     for contaminant, component in zip(zwert.contnames, zwert.compartments):
         #print contaminant, component
@@ -118,41 +152,38 @@ def main(conflicttype):
     
     # create a raster of thresholds for each contaminant
     traster =  proj.aktscenario+'/'+proj.aktlayout+'/'+'target_'
-    targets = []
-    for field, contname in zip(scenario.fields[3:],
-            zwert.contnames):
-        targets.append(scenario.rasterize_field(xres,yres,fieldname=field, 
-        rasterfilepath=traster+contname+'.asc'))
+    targets = {}
+  
+    for field, contname  in zip(scenario.fields[3:],  zwert.contnames) :
+        targets[contname] = scenario.rasterize_field(xres,yres,fieldname=field, 
+        rasterfilepath = traster+contname+'.asc')
         print "Target Raster created in: ", os.path.abspath(traster+contname+'.asc')
-        targets.append
     
-    # clip each pollution raster so it is in the size of our masks
-    craster = mmsca.MaskRaster()
-    craster.reader("DATA/PCE_in_gw.asc")
-    craster.fillrasterpoints(xres, yres)
-    craster.getareaofinterest("DATA/area_of_interest.shp")
-    # need to claculate the bounding vertices of the extent, 
-    # then clip the raster ... 
-    craster.clip2()
-    # after that clip the points out of the bounding vertices
-    # craster.getmask(craster.boundingvertices)
-    # clip valid points
-    # print type(craster.mask)
-    craster.mask = craster.mask * 1
-    craster.mask.resize(craster.Yrange.size, craster.Xrange.size)
-    craster.mask = np.flipud(craster.mask)
-    #craster.data.resize(craster.Yrange.size, craster.Xrange.size)
-    #print craster.
-    craster.writer("test_mask.asc", craster.mask, (craster.extent[0], craster.extent[3]),10,10)    
-    #craster.writer("test_data.asc", craster.data, (craster.new_extent[0], craster.new_extent[3]),10,10)
-    #craster.data.resize(layout_raster.Yrange.size, layout_raster.Xrange.size)
-    #craster.writer("test_data_mod.asc", craster.data, (craster.new_extent[0], craster.new_extent[3]),10,10)
     
+    cont_rasters=clipPollutionRasters(proj,zwert)
+    print cont_rasters
+    print targets
+    #print conts
     # calculate exceedance for each raster
     
+    exceedence1 = mmsca.ASCIIRaster()
+    pollu = cont_rasters["PCE"].data
+    print pollu.shape
+    mask = cont_rasters["PCE"].mask
+    print mask.shape
+    pollumasked = pollu[~mask]
+    print pollumasked.shape
+    # pollumasked.resize(140,149)
     #print targets
-    #import pdb
-    #pdb.set_trace()
+    z=np.all(pollu.mask,0) # columns
+    o=np.all(pollu.mask,1) # rows
+    # find all consecutive non masked colums
+    z=np.where(z==False)
+    # find all consecutive non masked rows
+    o=np.where(o==False)
+    
+    import pdb
+    pdb.set_trace()
     
 if __name__ == '__main__':
     conflicttype=parseArgs()

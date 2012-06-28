@@ -220,8 +220,8 @@ class ASCIIRaster():
             ypts.flatten())) 
             
         
-    def writer(self, dst_filename, array, topleft, ew_res, ns_res, 
-        proj=31468): 
+    def writer(self, dst_filename, array, bottomleft, ew_res, ns_res, 
+        proj=31468, Flip=True): 
         """
         This is a generic GDAL function to write ASCII Rasters.
         Here it is an aid function called by ClipPollution and others.
@@ -239,11 +239,14 @@ class ASCIIRaster():
         file - This function writes an ASCII raster file to the same path as 
         dst_filename.
         """
+        if Flip == True:
+            array = np.flipud(array)
+            
         gformat = "MEM"
         driver = gdal.GetDriverByName(gformat)
         dst_ds = driver.Create(dst_filename, len(array[0]), len(array), \
                 1, gdal.GDT_Float32)
-        extent = (topleft[0], ew_res, 0, topleft[1], 0, ns_res )
+        extent = (bottomleft[0], ew_res, 0, bottomleft[1], 0, ns_res )
         dst_ds.SetGeoTransform(extent)
         srs = osr.SpatialReference()
         srs.ImportFromEPSG(proj) 
@@ -303,11 +306,13 @@ class MaskRaster(ASCIIRaster):
         #       We need a fix in case we have multiple polygons
         # np.set_printoptions(precision=18)
         self.boundingvertices = np.asarray(boundary, dtype = np.float64)
+   
     def clip2(self, new_extent_polygon=None):
         """
-        clip existing raster to new extents.
+        Select only data points inside the polygon area of interest, 
+        leaves the contminant raster in its original size.
         """
-        if new_extent_polygon:
+        if new_extent_polygon is not None:
             self.getmask(new_extent_polygon)
         else:
             # corners of the raster clock wise
@@ -317,22 +322,22 @@ class MaskRaster(ASCIIRaster):
             [self.new_xurcorner, self.new_yurcorner], #upper right
             [self.new_xurcorner, self.new_yllcorner], #lower right
             ])    
-            
-            print "C:", corners  
-            """
-            corners = np.array([
-            [craster.new_xllcorner, craster.new_yllcorner], #lower left
-            [craster.new_xllcorner, craster.new_yurcorner], #upper left
-            [craster.new_xurcorner, craster.new_yurcorner], #upper right
-            [craster.new_xurcorner, craster.new_yllcorner], #lower right
-            ])
-            """
-        self.getmask(corners)
- 
-         
+            self.getmask(corners)
+        # invert 0 to 1
+        self.mask=np.logical_not(self.mask)
+        print self.mask
+        import pdb
+        pdb.set_trace()
+        self.mask.resize(self.Yrange.size, self.Xrange.size)
+        self.mask = np.flipud(self.mask)
+        self.data = np.ma.MaskedArray(self.data, mask=self.mask)
+        self.data = np.ma.filled(self.data, fill_value=-9999)
+        ### added
+        self.cdata = self.data[~self.mask]
+        
     def clip(self, new_extent_polygon=None):
         """
-        clip existing raster to new extents.
+        clip existing raster to new extents, not implemented yet
         """
         if new_extent_polygon:
             self.getmask(new_extent_polygon)
@@ -344,15 +349,7 @@ class MaskRaster(ASCIIRaster):
             [self.new_xurcorner, self.new_yurcorner], #upper right
             [self.new_xurcorner, self.new_yllcorner], #lower right
             ])      
-            """
-            corners = np.array([
-            [craster.new_xllcorner, craster.new_yllcorner], #lower left
-            [craster.new_xllcorner, craster.new_yurcorner], #upper left
-            [craster.new_xurcorner, craster.new_yurcorner], #upper right
-            [craster.new_xurcorner, craster.new_yllcorner], #lower right
-            ])
-            """
-        self.getmask(corners)
+            self.getmask(corners)
         # nxutils.points_inside_poly returns True if point inside the
         # area of interest. We want this point to be Valid, hence NOT
         # Masked, so we inverse the mask
@@ -361,19 +358,8 @@ class MaskRaster(ASCIIRaster):
 
         #In [224]: np.logical_not(cbla.mask[:4])
         #Out[224]: array([ True,  True,  True, False], dtype=bool)
-        print self.mask.size
-        print np.where(self.mask==True)[0].size
         # invert the mask
-        #self.mask=self.mask[np.logical_not(self.mask)]
-        self.mask=np.logical_not(self.mask)
-        print np.where(self.mask==False)[0].size
-        print "a:", self.mask.size
-        # select only points which are not masked
-        self.rasterpoints = self.rasterpoints[np.logical_not(self.mask)]
-        # need to flatten self.data
-        self.data = self.data.flatten()
-        self.data = self.data[np.logical_not(self.mask)]
-        print self.data.shape
+        print "Not Implement yet..."
         
     def getmask(self, vertices):
         """
@@ -528,10 +514,10 @@ class LandUseShp():
         if rasterfilepath:
             raster.data.resize(raster.Yrange.size, raster.Xrange.size)
             #raster.data.reshape(X)
-            raster.data = np.flipud(raster.data)
+            #raster.data = np.flipud(raster.data)
             np.putmask(raster.data, raster.data == 0, -9999)
             raster.writer(rasterfilepath, raster.data, 
-                    (raster.extent[0], raster.extent[3]+yres), xres, yres)
+                    (raster.extent[0], raster.extent[3]+yres*0.5), xres, yres)
         return raster
 
 class ZielWerte():
