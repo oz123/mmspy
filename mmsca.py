@@ -289,6 +289,12 @@ class MaskRaster(ASCIIRaster):
         self.new_yllcorner = self.new_extent[2]
         self.new_xurcorner = self.new_extent[1] 
         self.new_yurcorner = self.new_extent[3]
+        self.corners = np.array([
+            [self.new_xllcorner, self.new_yllcorner], #lower left
+            [self.new_xllcorner, self.new_yurcorner], #upper left
+            [self.new_xurcorner, self.new_yurcorner], #upper right
+            [self.new_xurcorner, self.new_yllcorner], #lower right
+            ])      
         area = layer.GetFeature(0)
         geometry = area.GetGeometryRef()
         boundary_raw = str(geometry.GetBoundary())
@@ -326,8 +332,8 @@ class MaskRaster(ASCIIRaster):
         # invert 0 to 1
         self.mask=np.logical_not(self.mask)
         print self.mask
-        import pdb
-        pdb.set_trace()
+        #import pdb
+        #pdb.set_trace()
         self.mask.resize(self.Yrange.size, self.Xrange.size)
         self.mask = np.flipud(self.mask)
         self.data = np.ma.MaskedArray(self.data, mask=self.mask)
@@ -343,7 +349,7 @@ class MaskRaster(ASCIIRaster):
             self.getmask(new_extent_polygon)
         else:
             # corners of the raster clock wise
-            corners = np.array([
+            self.corners = np.array([
             [self.new_xllcorner, self.new_yllcorner], #lower left
             [self.new_xllcorner, self.new_yurcorner], #upper left
             [self.new_xurcorner, self.new_yurcorner], #upper right
@@ -360,6 +366,12 @@ class MaskRaster(ASCIIRaster):
         #Out[224]: array([ True,  True,  True, False], dtype=bool)
         # invert the mask
         print "Not Implement yet..."
+        self.data=np.fliplr(self.data)
+        
+        
+        self.mask.resize(149,140)
+        self.cdata=self.data[np.flipud(self.mask)]
+        self.cdata.resize(149,140)
         
     def getmask(self, vertices):
         """
@@ -605,3 +617,34 @@ if __name__ == "main":
 #In [178]: valid=cbla[~cbla.mask]
 
 # bla[np.logical_not(cbla.mask)]
+#http://geospatialpython.com/2011/02/clip-raster-using-shapefile.html
+
+"""
+import mmsca
+
+craster = mmsca.MaskRaster()
+craster.xllcorner = 0 
+craster.yllcorner = 0
+craster.xurcorner = 10
+craster.yurcorner = 10
+craster.fillrasterpoints(1, 1)
+# make data points
+craster.data=np.arange(100,0,-1)
+craster.data.resize(10,10)
+craster.data=np.fliplr(craster.data)
+
+square=[[1,1],[1,6.5],[6.5,6.5],[6.5,1]]
+craster.getmask(square)
+craster.mask.resize(10,10)
+craster.cdata=craster.data[np.flipud(craster.mask)]
+craster.cdata.resize(5,5)
+
+craster = mmsca.MaskRaster()
+contraster="PAK30_B.aux"
+craster.reader("DATA/"+contraster.replace('aux','asc'))
+xres, yres = craster.extent[1], craster.extent[1]
+craster.fillrasterpoints(xres, yres)
+craster.getareaofinterest("DATA/area_of_interest.shp")
+craster.getmask(craster.corners)
+
+"""

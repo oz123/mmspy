@@ -95,11 +95,15 @@ def clipPollutionRasters(proj,zwert):
             craster.fillrasterpoints(xres, yres)
             craster.getareaofinterest("DATA/area_of_interest.shp")
             craster.clip2(new_extent_polygon=craster.boundingvertices)
+            
             area_of_interest_polygon=craster.boundingvertices
             craster.data = np.ma.MaskedArray(craster.data, mask=craster.mask)
             craster.data = np.ma.filled(craster.data, fill_value=-9999)
             clipped = os.path.abspath( proj.aktscenario+'/'+proj.aktlayout+'/'+contname+'_clipped.asc')
-            craster.writer(clipped, craster.mask, (craster.extent[0], craster.extent[3]+yres*0.5),10,10)
+            craster.writer(clipped, craster.data, (craster.extent[0], craster.extent[3]+yres*0.5),10,10)
+            craster.clip()
+            
+            craster.writer(clipped.replace('.asc','bla.asc'), craster.cdata, (craster.extent[0], craster.extent[3]+yres*0.5),10,10)
             print "Clipped Raster created in: ", clipped    
             craster.writer(clipped, craster.data, (craster.extent[0], craster.extent[3]+yres*0.5),10,10,Flip=False)
             conts[contname] = craster 
@@ -184,10 +188,16 @@ def main(conflicttype):
     
     import pdb
     pdb.set_trace()
+
+
     
 if __name__ == '__main__':
     conflicttype=parseArgs()
     main(conflicttype)
+
+
+
+
 
 #usage:
 #:~/Desktop/PROJECT_MMSpy/Projekt$ ./confanalysis.py . 0
