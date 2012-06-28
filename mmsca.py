@@ -163,7 +163,7 @@ class ASCIIRaster():
         self.Yrange = np.array((0, 0))
         self.boundingvertices = np.array((0, 0))
 
-    def rader(self, filename):
+    def reader(self, filename):
         """
         read an asci file, store a numpy array containing all data
         """
@@ -180,10 +180,12 @@ class ASCIIRaster():
         #Out[44]: [2.5553558813, 49.49721527038, 6.4083399744, 51.503826015]
         # the elements 2 and 3 of extent ans bbox are swapped!
         self.xllcorner = self.extent[0]
-        self.yllcorner = self.extent[2]
-        self.xurcorner = self.extent[1] 
-        self.yurcorner = self.extent[3]
+        self.xurcorner = self.xllcorner + self.ncols * self.cellsize 
+        self.yurcorner = self.extent[3]#self.yllcorner - self.nrows * self.cellsize
+        self.yllcorner = self.yurcorner - self.nrows * self.cellsize
         self.data = gdal_array.DatasetReadAsArray(dataset)
+        # TODO: check if OK to faltten 
+        # self.data = self.data.flatten()
         
     def fillrasterpoints(self, xres, yres):
         """
@@ -216,7 +218,8 @@ class ASCIIRaster():
         xpts, ypts = np.meshgrid(self.Xrange, self.Yrange)
         self.rasterpoints = np.column_stack((xpts.flatten(), 
             ypts.flatten())) 
-    
+            
+        
     def writer(self, dst_filename, array, topleft, ew_res, ns_res, 
         proj=31468): 
         """
@@ -275,14 +278,14 @@ class MaskRaster(ASCIIRaster):
         driver = ogr.GetDriverByName('ESRI Shapefile')
         datasource = driver.Open(datasource, 0)
         layer = datasource.GetLayer()
-        self.extent = layer.GetExtent()
-        print 'Extent des Bewertungsgebiets (area_of_interest):', self.extent
-        print 'UL:', self.extent[0], self.extent[3]
-        print 'LR:', self.extent[1], self.extent[2]
-        self.xllcorner = self.extent[0]
-        self.yllcorner = self.extent[2]
-        self.xurcorner = self.extent[1] 
-        self.yurcorner = self.extent[3]
+        self.new_extent = layer.GetExtent()
+        print 'Extent des Bewertungsgebiets (area_of_interest):\n', self.new_extent
+        print 'UR:', self.new_extent[1], self.new_extent[3]
+        print 'LL:', self.new_extent[0], self.new_extent[2]
+        self.new_xllcorner = self.new_extent[0]
+        self.new_yllcorner = self.new_extent[2]
+        self.new_xurcorner = self.new_extent[1] 
+        self.new_yurcorner = self.new_extent[3]
         area = layer.GetFeature(0)
         geometry = area.GetGeometryRef()
         boundary_raw = str(geometry.GetBoundary())
@@ -300,7 +303,78 @@ class MaskRaster(ASCIIRaster):
         #       We need a fix in case we have multiple polygons
         # np.set_printoptions(precision=18)
         self.boundingvertices = np.asarray(boundary, dtype = np.float64)
-    
+    def clip2(self, new_extent_polygon=None):
+        """
+        clip existing raster to new extents.
+        """
+        if new_extent_polygon:
+            self.getmask(new_extent_polygon)
+        else:
+            # corners of the raster clock wise
+            corners = np.array([
+            [self.new_xllcorner, self.new_yllcorner], #lower left
+            [self.new_xllcorner, self.new_yurcorner], #upper left
+            [self.new_xurcorner, self.new_yurcorner], #upper right
+            [self.new_xurcorner, self.new_yllcorner], #lower right
+            ])    
+            
+            print "C:", corners  
+            """
+            corners = np.array([
+            [craster.new_xllcorner, craster.new_yllcorner], #lower left
+            [craster.new_xllcorner, craster.new_yurcorner], #upper left
+            [craster.new_xurcorner, craster.new_yurcorner], #upper right
+            [craster.new_xurcorner, craster.new_yllcorner], #lower right
+            ])
+            """
+        self.getmask(corners)
+ 
+         
+    def clip(self, new_extent_polygon=None):
+        """
+        clip existing raster to new extents.
+        """
+        if new_extent_polygon:
+            self.getmask(new_extent_polygon)
+        else:
+            # corners of the raster clock wise
+            corners = np.array([
+            [self.new_xllcorner, self.new_yllcorner], #lower left
+            [self.new_xllcorner, self.new_yurcorner], #upper left
+            [self.new_xurcorner, self.new_yurcorner], #upper right
+            [self.new_xurcorner, self.new_yllcorner], #lower right
+            ])      
+            """
+            corners = np.array([
+            [craster.new_xllcorner, craster.new_yllcorner], #lower left
+            [craster.new_xllcorner, craster.new_yurcorner], #upper left
+            [craster.new_xurcorner, craster.new_yurcorner], #upper right
+            [craster.new_xurcorner, craster.new_yllcorner], #lower right
+            ])
+            """
+        self.getmask(corners)
+        # nxutils.points_inside_poly returns True if point inside the
+        # area of interest. We want this point to be Valid, hence NOT
+        # Masked, so we inverse the mask
+        # In [223]: cbla.mask[:4]
+        #Out[223]: array([False, False, False,  True], dtype=bool)
+
+        #In [224]: np.logical_not(cbla.mask[:4])
+        #Out[224]: array([ True,  True,  True, False], dtype=bool)
+        print self.mask.size
+        print np.where(self.mask==True)[0].size
+        # invert the mask
+        #self.mask=self.mask[np.logical_not(self.mask)]
+        self.mask=np.logical_not(self.mask)
+        print np.where(self.mask==False)[0].size
+        print "a:", self.mask.size
+        # select only points which are not masked
+        self.rasterpoints = self.rasterpoints[np.logical_not(self.mask)]
+        # need to flatten self.data
+        self.data = self.data.flatten()
+        self.data = self.data[np.logical_not(self.mask)]
+        print self.data.shape
+        
     def getmask(self, vertices):
         """
         getMask takes a list of points, and a list of vertices, 
@@ -408,7 +482,12 @@ class LandUseShp():
         This will set  the polygon field "Test" to 222+i.
         """
         idx=feature.GetFieldIndex(fieldname)
-        feature.SetField2(idx,value)
+        #import pdb 
+        #pdb.set_trace()
+        #print help(feature.SetField2)
+        #print help(feature.SetField)
+        
+        feature.SetField(idx,value)
         self.layer.SetFeature(feature)
         self.layer.SyncToDisk()
         #print "set ", fieldname, "to ", value
@@ -447,16 +526,13 @@ class LandUseShp():
             # insert to deleted indecies bogus points so next time
             # raster.mask is the same size as the previous step
         if rasterfilepath:
-            """
-            PROBLEM?: This still lives 0 intead of no data"
-            """
             raster.data.resize(raster.Yrange.size, raster.Xrange.size)
             #raster.data.reshape(X)
             raster.data = np.flipud(raster.data)
             np.putmask(raster.data, raster.data == 0, -9999)
             raster.writer(rasterfilepath, raster.data, 
-                    (raster.extent[0], raster.extent[3]+yres), yres, yres)
-        else: return raster
+                    (raster.extent[0], raster.extent[3]+yres), xres, yres)
+        return raster
 
 class ZielWerte():
     """
@@ -516,6 +592,30 @@ if __name__ == "main":
     A = LandUseShp(FILEPATH,"SzenarioA/ScALayout1/ScALayout1_bla.shp")
     A.addfield("Test")
 
+# test with gdal 1.7.3
+
 #MAX TERMIN MONTAG 16:30 25.Juni
 
 
+##In [175]: cbla=np.ma.MaskedArray(bla,mask=mask)
+
+##In [176]: cbla
+##Out[176]: 
+##masked_array(data = [1 2 3 -- 5 6 7 8 9 10],
+             ##mask = [False False False  True False False False False False False],
+       ##fill_value = 999999)
+
+
+##In [177]: cbla[~cbla.mask]
+##Out[177]: 
+##masked_array(data = [1 2 3 5 6 7 8 9 10],
+             ##mask = [False False False False False False False False False],
+       ##fill_value = 999999)
+
+
+##In [178]: b=A.layer.GetFeature(0)
+##KeyboardInterrupt
+
+#In [178]: valid=cbla[~cbla.mask]
+
+# bla[np.logical_not(cbla.mask)]
