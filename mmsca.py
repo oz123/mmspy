@@ -26,11 +26,30 @@ from osgeo import ogr
 from osgeo import osr
 from osgeo import gdal
 from osgeo import gdal_array
+from osgeo import gdalnumeric
+
 import os, ConfigParser, sys
 import shutil
 from matplotlib import nxutils
 import numpy as np
 import csv
+
+
+def world2Pixel(geoMatrix, x, y):
+  """
+  Uses a gdal geomatrix (gdal.GetGeoTransform()) to calculate
+  the pixel location of a geospatial coordinate 
+  """
+  ulX = geoMatrix[0]
+  ulY = geoMatrix[3]
+  xDist = geoMatrix[1]
+  yDist = geoMatrix[5]
+  rtnX = geoMatrix[2]
+  rtnY = geoMatrix[4]
+  pixel = int((x - ulX) / xDist)
+  line = int((ulY - y) / xDist)
+  return (pixel, line) 
+
 
 class Project():
     """
@@ -215,9 +234,9 @@ class ASCIIRaster():
                            self.xurcorner+0.5*xres,xres) 
         self.Yrange = np.arange(self.yllcorner+0.5*yres, 
                            self.yurcorner+0.5*yres,yres)
-        xpts, ypts = np.meshgrid(self.Xrange, self.Yrange)
-        self.rasterpoints = np.column_stack((xpts.flatten(), 
-            ypts.flatten())) 
+        self.xpts, self.ypts = np.meshgrid(self.Xrange, self.Yrange)
+        self.rasterpoints = np.column_stack((self.xpts.flatten(), 
+            self.ypts.flatten())) 
             
         
     def writer(self, dst_filename, array, bottomleft, ew_res, ns_res, 
@@ -343,35 +362,18 @@ class MaskRaster(ASCIIRaster):
         
     def clip(self, new_extent_polygon=None):
         """
-        clip existing raster to new extents, not implemented yet
+        Clip raster to fit inside polygon
         """
-        if new_extent_polygon:
-            self.getmask(new_extent_polygon)
-        else:
-            # corners of the raster clock wise
-            self.corners = np.array([
-            [self.new_xllcorner, self.new_yllcorner], #lower left
-            [self.new_xllcorner, self.new_yurcorner], #upper left
-            [self.new_xurcorner, self.new_yurcorner], #upper right
-            [self.new_xurcorner, self.new_yllcorner], #lower right
-            ])      
-            self.getmask(corners)
-        # nxutils.points_inside_poly returns True if point inside the
-        # area of interest. We want this point to be Valid, hence NOT
-        # Masked, so we inverse the mask
-        # In [223]: cbla.mask[:4]
-        #Out[223]: array([False, False, False,  True], dtype=bool)
-
-        #In [224]: np.logical_not(cbla.mask[:4])
-        #Out[224]: array([ True,  True,  True, False], dtype=bool)
-        # invert the mask
-        print "Not Implement yet..."
-        self.data=np.fliplr(self.data)
-        
-        
-        self.mask.resize(149,140)
-        self.cdata=self.data[np.flipud(self.mask)]
-        self.cdata.resize(149,140)
+        self.cdata=craster.data[ulY:lrY, ulX:lrX]
+        self.getmask(self.boundingvertices)
+        self.mask.resize(250,400)
+        self.mask=craster.mask[ulY:lrY, ulX:lrX]
+        #craster.mask=np.logical_not(craster.mask)
+        self.cdata = np.choose(mask, \
+            (craster.cdata, 0))
+       
+       
+       
         
     def getmask(self, vertices):
         """
@@ -594,31 +596,6 @@ if __name__ == "main":
 
 #MAX TERMIN MONTAG 16:30 25.Juni
 
-
-##In [175]: cbla=np.ma.MaskedArray(bla,mask=mask)
-
-##In [176]: cbla
-##Out[176]: 
-##masked_array(data = [1 2 3 -- 5 6 7 8 9 10],
-             ##mask = [False False False  True False False False False False False],
-       ##fill_value = 999999)
-
-
-##In [177]: cbla[~cbla.mask]
-##Out[177]: 
-##masked_array(data = [1 2 3 5 6 7 8 9 10],
-             ##mask = [False False False False False False False False False],
-       ##fill_value = 999999)
-
-
-##In [178]: b=A.layer.GetFeature(0)
-##KeyboardInterrupt
-
-#In [178]: valid=cbla[~cbla.mask]
-
-# bla[np.logical_not(cbla.mask)]
-#http://geospatialpython.com/2011/02/clip-raster-using-shapefile.html
-
 """
 import mmsca
 
@@ -633,18 +610,46 @@ craster.data=np.arange(100,0,-1)
 craster.data.resize(10,10)
 craster.data=np.fliplr(craster.data)
 
-square=[[1,1],[1,6.5],[6.5,6.5],[6.5,1]]
+#square=[[1,1],[1,6.5],[6.5,6.5],[6.5,1]]
+maxY, maxX= 6.5,6.5
+minY, minX= 1,1
+
+square=[[minX,minY],[minX,maxY],[maxX,maxY],[maxX,minY]]
 craster.getmask(square)
 craster.mask.resize(10,10)
 craster.cdata=craster.data[np.flipud(craster.mask)]
-craster.cdata.resize(5,5)
-
-craster = mmsca.MaskRaster()
-contraster="PAK30_B.aux"
-craster.reader("DATA/"+contraster.replace('aux','asc'))
-xres, yres = craster.extent[1], craster.extent[1]
-craster.fillrasterpoints(xres, yres)
-craster.getareaofinterest("DATA/area_of_interest.shp")
-craster.getmask(craster.corners)
-
+craster.cdata.resize(int(maxX-minX),int(maxY-minY))
 """
+
+def RasterClipper():
+    craster = mmsca.MaskRaster()
+    contraster2 = 'PCE_in_gw.aux'
+    #contraster="PAK30_B.aux"
+    craster.reader("DATA/"+contraster2.replace('aux','asc'))
+    xres, yres = craster.extent[1], craster.extent[1]
+    craster.fillrasterpoints(xres, yres)
+    craster.getareaofinterest("DATA/area_of_interest.shp")
+    
+    
+    minX, maxX=craster.new_extent [0],craster.new_extent[1] 
+    minY, maxY= craster.new_extent [2],craster.new_extent[3]
+    
+    ulX, ulY=mmsca.world2Pixel(craster.extent, minX, maxY)
+    lrX, lrY=mmsca.world2Pixel(craster.extent, maxX, minY)
+    
+    
+    craster.getmask(craster.corners)
+    craster.mask=np.logical_not(craster.mask)
+    #craster.mask=craster.mask[~craster.mask]
+    #minX, maxX=craster.new_extent [0],craster.new_extent[1] 
+    #minY, maxY= craster.new_extent [2],craster.new_extent[3]
+    craster.mask.resize(craster.Yrange.size,craster.Xrange.size)
+    craster.cdata= np.choose(np.flipud(craster.mask), (craster.data, 0))
+    
+    #craster.cdata=craster.data[craster.mask]
+    #craster.cdata.resize(int(maxY-minY)/10,int(maxX-minX)/10)
+    
+    craster.ccdata=craster.cdata[ulY:lrY, ulX:lrX]
+    craster.writer("cdata2.asc",craster.cdata, (3366307, 5813454.+139*10), 10,10,Flip=False)
+    craster.writer("ccdata2.asc",craster.ccdata, (3366307, 5813454.+139*10), 10,10,Flip=False)
+    craster.writer("mask.asc",craster.mask, (3366307, 5813454.+139*10), 10,10,Flip=False)
