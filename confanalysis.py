@@ -101,9 +101,6 @@ def clipPollutionRasters(proj,zwert):
             craster.data = np.ma.filled(craster.data, fill_value=-9999)
             clipped = os.path.abspath( proj.aktscenario+'/'+proj.aktlayout+'/'+contname+'_clipped.asc')
             craster.writer(clipped, craster.data, (craster.extent[0], craster.extent[3]+yres*0.5),10,10)
-            craster.clip()
-            
-            craster.writer(clipped.replace('.asc','bla.asc'), craster.cdata, (craster.extent[0], craster.extent[3]+yres*0.5),10,10)
             print "Clipped Raster created in: ", clipped    
             craster.writer(clipped, craster.data, (craster.extent[0], craster.extent[3]+yres*0.5),10,10,Flip=False)
             conts[contname] = craster 
@@ -165,36 +162,16 @@ def main(conflicttype):
     
     
     cont_rasters=clipPollutionRasters(proj,zwert)
-    print cont_rasters
-    print targets
-    #print conts
-    # calculate exceedance for each raster
-    
-    exceedence1 = mmsca.ASCIIRaster()
-    pollu = cont_rasters["PCE"].data
-    print pollu.shape
-    mask = cont_rasters["PCE"].mask
-    print mask.shape
-    pollumasked = pollu[~mask]
-    print pollumasked.shape
-    # pollumasked.resize(140,149)
-    #print targets
-    z=np.all(pollu.mask,0) # columns
-    o=np.all(pollu.mask,1) # rows
-    # find all consecutive non masked colums
-    z=np.where(z==False)
-    # find all consecutive non masked rows
-    o=np.where(o==False)
-    
-    import pdb
-    pdb.set_trace()
-
-
+    craster=cont_rasters["PCE"]
+    craster.clip_to_cutline(xres,yres)
+    minX,maxY = craster.xllcorner, craster.yurcorner
+    minX , maxY = round(minX,-1), round(maxY,-1)
+    craster.writer("ccdata2m_cutline.asc",craster.data, (minX-xres, maxY+yres), 10,10,Flip=False)
     
 if __name__ == '__main__':
     conflicttype=parseArgs()
     main(conflicttype)
-
+    
 
 
 
