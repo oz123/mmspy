@@ -230,10 +230,15 @@ class ASCIIRaster():
         p6x 1.5, p6y 2.5
         ...
         """
-        self.Xrange = np.arange(self.xllcorner+0.5*xres, 
-                           self.xurcorner+0.5*xres,xres) 
-        self.Yrange = np.arange(self.yllcorner+0.5*yres, 
-                           self.yurcorner+0.5*yres,yres)
+        self.Xrange = np.arange(self.xllcorner, 
+                           self.xurcorner-0.5*xres,xres) 
+        self.Yrange = np.arange(self.yllcorner, 
+                           self.yurcorner-0.5*xres,yres)
+        #print self.Xrange.size, self.Yrange.size
+        #self.Xrange = np.arange(self.xllcorner+0.5*xres, 
+        #                   self.xurcorner+0.5*xres,xres) 
+        #self.Yrange = np.arange(self.yllcorner+0.5*yres, 
+        #                   self.yurcorner+0.5*yres,yres)
         self.xpts, self.ypts = np.meshgrid(self.Xrange, self.Yrange)
         self.rasterpoints = np.column_stack((self.xpts.flatten(), 
             self.ypts.flatten())) 
@@ -350,7 +355,7 @@ class MaskRaster(ASCIIRaster):
             self.getmask(corners)
         # invert 0 to 1
         self.mask=np.logical_not(self.mask)
-        print self.mask
+        #print self.mask
         #import pdb
         #pdb.set_trace()
         self.mask.resize(self.Yrange.size, self.Xrange.size)
@@ -363,7 +368,7 @@ class MaskRaster(ASCIIRaster):
     def clip(self, new_extent_polygon=None):
         """
         Clip raster to fit inside polygon
-        """
+        #
         self.cdata=craster.data[ulY:lrY, ulX:lrX]
         self.getmask(self.boundingvertices)
         self.mask.resize(250,400)
@@ -371,6 +376,7 @@ class MaskRaster(ASCIIRaster):
         #craster.mask=np.logical_not(craster.mask)
         self.cdata = np.choose(mask, \
             (craster.cdata, 0))
+        """
        
        
        
@@ -531,7 +537,8 @@ class LandUseShp():
             #raster.data = np.flipud(raster.data)
             np.putmask(raster.data, raster.data == 0, -9999)
             raster.writer(rasterfilepath, raster.data, 
-                    (raster.extent[0], raster.extent[3]+yres*0.5), xres, yres)
+                    #(raster.extent[0], raster.extent[3]+yres*0.5), xres, yres)
+                    (raster.extent[0], raster.extent[3]), xres, yres)
         return raster
 
 class ZielWerte():
@@ -594,35 +601,9 @@ if __name__ == "main":
 
 # test with gdal 1.7.3
 
-#MAX TERMIN MONTAG 16:30 25.Juni
 
-"""
-import mmsca
-
-craster = mmsca.MaskRaster()
-craster.xllcorner = 0 
-craster.yllcorner = 0
-craster.xurcorner = 10
-craster.yurcorner = 10
-craster.fillrasterpoints(1, 1)
-# make data points
-craster.data=np.arange(100,0,-1)
-craster.data.resize(10,10)
-craster.data=np.fliplr(craster.data)
-
-#square=[[1,1],[1,6.5],[6.5,6.5],[6.5,1]]
-maxY, maxX= 6.5,6.5
-minY, minX= 1,1
-
-square=[[minX,minY],[minX,maxY],[maxX,maxY],[maxX,minY]]
-craster.getmask(square)
-craster.mask.resize(10,10)
-craster.cdata=craster.data[np.flipud(craster.mask)]
-craster.cdata.resize(int(maxX-minX),int(maxY-minY))
-"""
-
-def RasterClipper():
-    craster = mmsca.MaskRaster()
+def RasterClipper(xres,yres):
+    craster = MaskRaster()
     contraster2 = 'PCE_in_gw.aux'
     #contraster="PAK30_B.aux"
     craster.reader("DATA/"+contraster2.replace('aux','asc'))
@@ -631,25 +612,41 @@ def RasterClipper():
     craster.getareaofinterest("DATA/area_of_interest.shp")
     
     
-    minX, maxX=craster.new_extent [0],craster.new_extent[1] 
-    minY, maxY= craster.new_extent [2],craster.new_extent[3]
+    minX, maxX=craster.new_extent [0]-5,craster.new_extent[1]+5
+    minY, maxY= craster.new_extent [2]-5,craster.new_extent[3]+5
     
-    ulX, ulY=mmsca.world2Pixel(craster.extent, minX, maxY)
-    lrX, lrY=mmsca.world2Pixel(craster.extent, maxX, minY)
+    ulX, ulY=world2Pixel(craster.extent, minX, maxY)
+    lrX, lrY=world2Pixel(craster.extent, maxX, minY)
     
     
     craster.getmask(craster.corners)
     craster.mask=np.logical_not(craster.mask)
-    #craster.mask=craster.mask[~craster.mask]
-    #minX, maxX=craster.new_extent [0],craster.new_extent[1] 
-    #minY, maxY= craster.new_extent [2],craster.new_extent[3]
+    
+    
     craster.mask.resize(craster.Yrange.size,craster.Xrange.size)
-    craster.cdata= np.choose(np.flipud(craster.mask), (craster.data, 0))
-    
-    #craster.cdata=craster.data[craster.mask]
-    #craster.cdata.resize(int(maxY-minY)/10,int(maxX-minX)/10)
-    
+    # choose all data points inside the square boundaries of the AOI,
+    # replace all other points with NULL
+    craster.cdata= np.choose(np.flipud(craster.mask), (craster.data, -9999))
+    # resise the data set to be the size of the squared polygon
     craster.ccdata=craster.cdata[ulY:lrY, ulX:lrX]
-    craster.writer("cdata2.asc",craster.cdata, (3366307, 5813454.+139*10), 10,10,Flip=False)
-    craster.writer("ccdata2.asc",craster.ccdata, (3366307, 5813454.+139*10), 10,10,Flip=False)
-    craster.writer("mask.asc",craster.mask, (3366307, 5813454.+139*10), 10,10,Flip=False)
+    
+    craster.writer("ccdata2m.asc",craster.ccdata, (minX+xres*.5, maxY+yres*.5), 10,10,Flip=False)
+    
+    # in second step we rechoose all the data points which are inside the
+    # bounding vertices of AOI
+    
+    # need to re-define our raster points
+    craster.xllcorner=minX
+    craster.yllcorner=minY
+    craster.xurcorner=maxX
+    craster.yurcorner=maxY
+    
+    craster.fillrasterpoints(10,10)
+    craster.getmask(craster.boundingvertices)
+    craster.data=craster.ccdata
+    craster.clip2(new_extent_polygon=craster.boundingvertices)
+    craster.data = np.ma.MaskedArray(craster.data, mask=craster.mask)
+    craster.data = np.ma.filled(craster.data, fill_value=-9999)
+    # write the raster to disk
+    craster.writer("ccdata2m_clipped.asc",craster.data, (minX+xres*.5, maxY+yres*.5), 10,10,Flip=False)
+    
