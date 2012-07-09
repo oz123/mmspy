@@ -116,6 +116,39 @@ def clipPollutionRasters(proj,zwert):
             conts[contname] = craster 
     return conts
     
+def cut_rasters_to_cutline(proj,zwert):
+    """
+    cut rasters to cutline
+    """
+    conts = {}
+    for i, (contraster,contname) in enumerate(zip(zwert.contrasternames, zwert.contnames)):
+    # clip each pollution raster so it is in the size of our masks
+        if i == 0:
+            craster = mmsca.MaskRaster()
+            craster.reader("DATA/"+contraster.replace('aux','asc'))
+            xres, yres = craster.extent[1], craster.extent[1]
+            craster.fillrasterpoints(xres, yres)
+            craster.getareaofinterest("DATA/area_of_interest.shp")
+            area_of_interest_polygon=craster.boundingvertices
+            craster.clip_to_cutline(xres,yres)
+            minX,maxY = craster.xllcorner, craster.yurcorner
+            minX , maxY = round(minX,-1), round(maxY,-1)
+            clipped = os.path.abspath( proj.aktscenario+'/'+proj.aktlayout+'/'+contname+'_cutline.asc')
+            craster.writer(clipped,craster.data, (minX-xres, maxY+yres), 10,10,Flip=False)
+            print "Cutline  Raster created in: ", clipped    
+            conts[contname] = craster 
+        else:
+            craster.reader("DATA/"+contraster.replace('aux','asc'))
+            xres, yres = craster.extent[1], craster.extent[1]
+            craster.fillrasterpoints(xres, yres)
+            craster.clip_to_cutline(xres,yres)
+            clipped = os.path.abspath( proj.aktscenario+'/'+proj.aktlayout+'/'+contname+'_cutline.asc')
+            craster.writer(clipped,craster.data, (minX-xres, maxY+yres), 10,10,Flip=False)
+            print "Cutline  Raster created in: ", clipped  
+            conts[contname] = craster 
+    return conts
+    
+    
 def main(conflicttype):
     """
     The main algorithm that drives the conflict analysis.
@@ -152,6 +185,9 @@ def main(conflicttype):
     populateShpfileDbase(scenario,zwert)
     
     # create a raster of thresholds for each contaminant
+    # the target rasters are created in the size of the bounding box 
+    # of area of interest
+     
     traster =  proj.aktscenario+'/'+proj.aktlayout+'/'+'target_'
     targets = {}
   
@@ -160,13 +196,10 @@ def main(conflicttype):
         rasterfilepath = traster+contname+'.asc')
         print "Target Raster created in: ", os.path.abspath(traster+contname+'.asc')
     
+    cont_rasters = cut_rasters_to_cutline(proj,zwert)
+    print cont_rasters
     
-    cont_rasters=clipPollutionRasters(proj,zwert)
-    craster=cont_rasters["PCE"]
-    craster.clip_to_cutline(xres,yres)
-    minX,maxY = craster.xllcorner, craster.yurcorner
-    minX , maxY = round(minX,-1), round(maxY,-1)
-    craster.writer("ccdata2m_cutline.asc",craster.data, (minX-xres, maxY+yres), 10,10,Flip=False)
+    
     
 if __name__ == '__main__':
     conflicttype=parseArgs()
