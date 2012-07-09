@@ -115,6 +115,22 @@ def clipPollutionRasters(proj,zwert):
             craster.writer(clipped, craster.data, (craster.extent[0], craster.extent[3]+yres*0.5),10,10,Flip=False)
             conts[contname] = craster 
     return conts
+
+
+def create_targets(shpfile, proj, zwerts, xres, yres):
+    """
+    create a raster of thresholds for each contaminant
+    the target rasters are created in the size of the bounding box 
+    of area of interest
+    """
+    traster =  proj.aktscenario+'/'+proj.aktlayout+'/'+'target_'
+    targets = {}
+    for field, contname  in zip(shpfile.fields[3:],  zwerts.contnames) :
+        targets[contname] = shpfile.rasterize_field(xres,yres,fieldname=field, 
+        rasterfilepath = traster+contname+'.asc')
+        print "Target Raster created in: ", os.path.abspath(traster+contname+'.asc')
+    return targets
+    
     
 def cut_rasters_to_cutline(proj,zwert):
     """
@@ -122,10 +138,9 @@ def cut_rasters_to_cutline(proj,zwert):
     """
     conts = {}
     for i, (contraster,contname) in enumerate(zip(zwert.contrasternames, zwert.contnames)):
-    # clip each pollution raster so it is in the size of our masks
         if i == 0:
             craster = mmsca.MaskRaster()
-            craster.reader("DATA/"+contraster.replace('aux','asc'))
+            craster.reader("DATA/"+contraster.replace('aux', 'asc'))
             xres, yres = craster.extent[1], craster.extent[1]
             craster.fillrasterpoints(xres, yres)
             craster.getareaofinterest("DATA/area_of_interest.shp")
@@ -134,16 +149,16 @@ def cut_rasters_to_cutline(proj,zwert):
             minX,maxY = craster.xllcorner, craster.yurcorner
             minX , maxY = round(minX,-1), round(maxY,-1)
             clipped = os.path.abspath( proj.aktscenario+'/'+proj.aktlayout+'/'+contname+'_cutline.asc')
-            craster.writer(clipped,craster.data, (minX-xres, maxY+yres), 10,10,Flip=False)
+            craster.writer(clipped,craster.data, (minX-xres, maxY+yres), xres, yres, Flip = False)
             print "Cutline  Raster created in: ", clipped    
             conts[contname] = craster 
         else:
-            craster.reader("DATA/"+contraster.replace('aux','asc'))
+            craster.reader("DATA/"+contraster.replace('aux', 'asc'))
             xres, yres = craster.extent[1], craster.extent[1]
             craster.fillrasterpoints(xres, yres)
             craster.clip_to_cutline(xres,yres)
             clipped = os.path.abspath( proj.aktscenario+'/'+proj.aktlayout+'/'+contname+'_cutline.asc')
-            craster.writer(clipped,craster.data, (minX-xres, maxY+yres), 10,10,Flip=False)
+            craster.writer(clipped,craster.data, (minX-xres, maxY+yres), xres, yres, Flip = False)
             print "Cutline  Raster created in: ", clipped  
             conts[contname] = craster 
     return conts
@@ -178,26 +193,14 @@ def main(conflicttype):
         #print contaminant, component
         if component == "Boden":  scenario.addfield(contaminant+"_B")
         elif component == "GW": scenario.addfield(contaminant+"_in_GW")
-    
     # for each polygon fill in the allowed threshold for each contaminant
     # based on the land use code
     scenario.layer.ResetReading()
     populateShpfileDbase(scenario,zwert)
-    
-    # create a raster of thresholds for each contaminant
-    # the target rasters are created in the size of the bounding box 
-    # of area of interest
-     
-    traster =  proj.aktscenario+'/'+proj.aktlayout+'/'+'target_'
-    targets = {}
-  
-    for field, contname  in zip(scenario.fields[3:],  zwert.contnames) :
-        targets[contname] = scenario.rasterize_field(xres,yres,fieldname=field, 
-        rasterfilepath = traster+contname+'.asc')
-        print "Target Raster created in: ", os.path.abspath(traster+contname+'.asc')
-    
+    targets = create_targets(scenario, proj, zwert, xres, yres)
+    # print targets
     cont_rasters = cut_rasters_to_cutline(proj,zwert)
-    print cont_rasters
+    # print cont_rasters
     
     
     
