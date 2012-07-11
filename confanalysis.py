@@ -116,22 +116,46 @@ def clipPollutionRasters(proj,zwert):
             conts[contname] = craster 
     return conts
 
-
-def create_targets(shpfile, proj, zwerts, xres, yres):
+def create_target(shpfile, proj, contname,xres, yres):
     """
     create a raster of thresholds for each contaminant
     the target rasters are created in the size of the bounding box 
     of area of interest
     """
     traster =  proj.aktscenario+'/'+proj.aktlayout+'/'+'target_'
-    targets = {}
-    for field, contname  in zip(shpfile.fields[3:],  zwerts.contnames) :
-        targets[contname] = shpfile.rasterize_field(xres,yres,fieldname=field, 
-        rasterfilepath = traster+contname+'.asc')
-        print "Target Raster created in: ", os.path.abspath(traster+contname+'.asc')
-    return targets
+    target = shpfile.rasterize_field(xres,yres,fieldname=contname, 
+    rasterfilepath = traster+contname+'.asc')
+    print "Target Raster created in: ", os.path.abspath(traster+contname+'single.asc')
+    return target
     
+
+def cut_to_cutline(proj,contraster):
+    """
+    cut raster to cutline
+    """
+    #for i, (contraster,contname) in enumerate(zip(zwert.contrasternames, zwert.contnames)):
+    #    print contraster,contname
+    #    if i == 0:
+    craster = mmsca.MaskRaster()
+    craster.reader("DATA/"+contraster.replace('aux', 'asc'))
+    xres, yres = craster.extent[1], craster.extent[1]
+    craster.fillrasterpoints(xres, yres)
+    craster.getareaofinterest("DATA/area_of_interest.shp")
+    area_of_interest_polygon=craster.boundingvertices
+    craster.clip_to_cutline(xres,yres)
+    minX, maxY = craster.xllcorner, craster.yurcorner
+    minX, maxY = round(minX,-1), round(maxY,-1)
+    clipped = os.path.abspath( proj.aktscenario+'/'+proj.aktlayout+'/'+contraster.replace('.aux','_cutline_single.asc'))
+    craster.data = np.ma.MaskedArray(craster.data, mask=craster.mask)
+    craster.data = np.ma.filled(craster.data, fill_value=-9999)
     
+    craster.writer(clipped,craster.data, (minX-xres, maxY+yres), xres, yres, Flip = False)
+    print "Cutline  Raster created in: ", clipped    
+    
+    return craster 
+    
+
+
 def cut_rasters_to_cutline(proj,zwert):
     """
     cut rasters to cutline
@@ -174,40 +198,28 @@ def cut_rasters_to_cutline(proj,zwert):
     return conts
     
 
-def calculate_exceedances(proj, conts, targets):
+def calculate_exceedance(proj, cont, cont_name, target):
     """
     devide the data from each cont raster by the 
     data from each target raster 
     """ 
-    exceedances = {}
     #for cont, targets in conts.keys():
-    for cont in ["PCE","PAK30","TCE","PAK60"]:
-        eraster = mmsca.MaskRaster()
-        print cont
-        # np.set_printoptions(precision=18)
-        eraster.data = np.flipud(conts[cont].data)/targets[cont].data
-        #for i,j in zip(np.flipud(conts[cont].data),targets[cont].data): 
-            #print "cont:", i
-            #print "target:", j
-            #print 'cont/target', i/j
-            #raw_input()
-        eraster.data = np.flipud(eraster.data)
-        eraster.mask = conts[cont].mask
-        xres, yres =  conts[cont].extent[1],  conts[cont].extent[1]
-        minX, maxY = conts[cont].xllcorner, conts[cont].yurcorner
-        minX, maxY = round(minX,-1), round(maxY,-1)
-        # 
-        # replace all negative values with zeros
-        eraster.data = np.where(eraster.data > 0, eraster.data, 0)
-        # put mask, e.g. remove all values outside of Area Of Interest
-        eraster.data = np.ma.MaskedArray(eraster.data, mask=eraster.mask)
-        eraster.data = np.ma.filled(eraster.data, fill_value=-9999)
-        exceedance = os.path.abspath( proj.aktscenario+'/'+proj.aktlayout+'/'+cont+'_exceedance_fixed.asc')
-        print "Exceedance  Raster created in: ", exceedance
-        eraster.writer(exceedance, eraster.data, (minX-xres, maxY+yres), xres, yres, Flip = False)
-        exceedances[cont] = eraster
-    
-    return exceedances
+    eraster = mmsca.MaskRaster()
+    eraster.data = np.flipud(cont.data)/target.data
+    eraster.data = np.flipud(eraster.data)
+    eraster.mask = cont.mask
+    xres, yres =  cont.extent[1],  cont.extent[1]
+    minX, maxY = cont.xllcorner, cont.yurcorner
+    minX, maxY = round(minX,-1), round(maxY,-1)
+    # replace all negative values with zeros
+    eraster.data = np.where(eraster.data > 0, eraster.data, 0)
+    # put mask, e.g. remove all values outside of Area Of Interest
+    eraster.data = np.ma.MaskedArray(eraster.data, mask=eraster.mask)
+    eraster.data = np.ma.filled(eraster.data, fill_value=-9999)
+    exceedance = os.path.abspath( proj.aktscenario+'/'+proj.aktlayout+'/'+cont_name+'_exceedance_fixed.asc')
+    print "Exceedance  Raster created in: ", exceedance
+    eraster.writer(exceedance, eraster.data, (minX-xres, maxY+yres), xres, yres, Flip = False)
+    return eraster
     
 def main(conflicttype):
     """
@@ -239,17 +251,24 @@ def main(conflicttype):
         if component == "Boden":  scenario.addfield(contaminant+"_B")
         elif component == "GW": scenario.addfield(contaminant+"_in_GW")
     # for each polygon fill in the allowed threshold for each contaminant
-    # based on the land use code
+    # based on the land use codeG
     scenario.layer.ResetReading()
     populateShpfileDbase(scenario,zwert)
-    targets = create_targets(scenario, proj, zwert, xres, yres)
-    print targets
-    cont_rasters = cut_rasters_to_cutline(proj,zwert)
-    print cont_rasters
-    # import pdb
-    # pdb.set_trace()
-    #exceedance_rasters = calculate_exceedances(proj, cont_rasters, targets)
     
+    
+    # TODO: automate for all 4 contaminants the 3 steps
+    
+    pce_target = create_target(scenario, proj, "PCE_in_GW", xres, yres)
+    pce_raster = cut_to_cutline(proj, "PCE_in_gw.aux")
+    # calculate exceedance now works directly on the arrays in memory
+    calculate_exceedance(proj, pce_raster, "PCE" , pce_target)
+    
+    tce_target = create_target(scenario, proj, "TCE_in_GW", xres, yres)
+    tce_raster = cut_to_cutline(proj, "TCE_in_gw.aux")
+    calculate_exceedance(proj, pce_raster, "TCE" , tce_target)
+
+    """
+    # Works with writing & reading to HD 
     for cont in zwert.contnames:
         eraster = mmsca.MaskRaster()
         cont_pol_n = os.path.abspath( proj.aktscenario+'/'+proj.aktlayout+'/'+cont+'_cutline.asc')
@@ -258,14 +277,17 @@ def main(conflicttype):
         cont_tar = mmsca.ASCIIRaster()    
         cont_pol.reader(cont_pol_n)
         cont_tar.reader(cont_tar_n)
+        #print "H ",cont_tar.data.shape
+        print "cont: ",cont , cont_pol.data[78][78], cont_tar.data[78][78]
+        print "cont: ",cont , cont_pol.data[61][1], cont_tar.data[61][1]
         eraster.data = cont_pol.data / cont_tar.data
         eraster.data = np.where(eraster.data > 0, eraster.data, 0)
-        eraster.data = np.ma.MaskedArray(eraster.data, mask=cont_rasters["PCE"].mask)
-        eraster.data = np.ma.filled(eraster.data, fill_value=-9999)
+        eraster.data = np.ma.MaskedArray(eraster.data, mask = cont_rasters["PCE"].mask)
+        eraster.data = np.ma.filled(eraster.data, fill_value = -9999)
         exceedance = os.path.abspath( proj.aktscenario+'/'+proj.aktlayout+'/'+cont+'_exceedance_fixed3.asc')
         print "Exceedance  Raster created in: ", exceedance
         eraster.writer(exceedance, eraster.data, (cont_pol.xllcorner, cont_pol.yurcorner), xres, yres, Flip = False)
-    
+    """
 if __name__ == '__main__':
     conflicttype=parseArgs()
     main(conflicttype)
