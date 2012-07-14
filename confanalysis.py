@@ -123,18 +123,25 @@ def calculate_exceedance(proj, cont, cont_name, target):
     eraster = mmsca.MaskRaster()
     eraster.data = np.flipud(cont.data)/target.data
     eraster.data = np.flipud(eraster.data)
+    # replace all negative values with zeros
+    eraster.data = np.where(eraster.data > 0, eraster.data, 0)
     eraster.mask = cont.mask
     xres, yres =  cont.extent[1],  cont.extent[1]
     minX, maxY = cont.xllcorner, cont.yurcorner
     minX, maxY = round(minX,-1), round(maxY,-1)
-    # replace all negative values with zeros
-    eraster.data = np.where(eraster.data > 0, eraster.data, 0)
     # put mask, e.g. remove all values outside of Area Of Interest
     eraster.data = np.ma.MaskedArray(eraster.data, mask=eraster.mask)
-    eraster.data = np.ma.filled(eraster.data, fill_value=-9999)
-    exceedance = os.path.abspath( proj.aktscenario+'/'+proj.aktlayout+'/'+cont_name+'_exceedance.asc')
-    print "Exceedance  Raster created in: ", exceedance
-    eraster.writer(exceedance, eraster.data, (minX-xres, maxY+yres), xres, yres, Flip = False)
+    # exceedance absolute is the ratio of contaminant level to allowed threshold
+    exceedance = os.path.abspath( proj.aktscenario+'/'+proj.aktlayout+'/'+cont_name+'_exceedance_abs.asc')
+    print "Absolute exceedance  raster created in: ", exceedance
+    eraster.writer(exceedance, np.ma.filled(eraster.data, fill_value=-9999), (minX-xres, maxY+yres), xres, yres, Flip = False)
+    # calucalte binary exceedance raster
+    # if the ratio is higher than 1 than replace with True (1), if ratio is smaller
+    # than replace with False (0)
+    eraster.data = np.ma.where(eraster.data > 1, 1, 0)
+    exceedance = os.path.abspath( proj.aktscenario+'/'+proj.aktlayout+'/'+cont_name+'_exceedance_bool.asc')
+    print "Boolean exceedance  raster created in: ", exceedance
+    eraster.writer(exceedance, np.ma.filled(eraster.data, fill_value=-9999), (minX-xres, maxY+yres), xres, yres, Flip = False)
     return eraster
     
 def main(conflicttype):
@@ -170,6 +177,7 @@ def main(conflicttype):
     # based on the land use codeG
     scenario.layer.ResetReading()
     populateShpfileDbase(scenario,zwert) 
+    # import pdb; pdb.set_trace()
     # create targets, cut raster to cutline, calculate the exceedances   
     for cont in zwert.contrasternames:
         cont_target = create_target(scenario, proj, cont.replace(".aux",""), xres, yres)
