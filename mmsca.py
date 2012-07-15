@@ -282,17 +282,19 @@ class ASCIIRaster():
         dst_ds = driver.CreateCopy(dst_filename, dst_ds)
         dst_ds = None
         
-        def polygonize():
-            """
-            TODO: Copy CreateTempExceedPolygon from tools.py
-            """
-            print "Not implemeted yet..."
-            
-            prog_func = None 
-            maskband = None
-            options = []
-            gdal.Polygonize( srcband, maskband, dst_layer, dst_field, options,
-            callback = prog_func )
+    def polygonize(src_raster, dst_layer, dst_fields={}):
+        """
+        ShapeFile(".", dst_layer, fields={"ID":ogr.OFTInteger, "Exceedance":ogr.OFTInteger})
+        """
+        print "Not implemeted yet..."
+        src_ds = gdal.Open(src_raster)
+        srcband = src_ds.GetRasterBand(1) 
+        prog_func = None 
+        maskband = None #optional
+        options = []
+        ShapeFile(".", dst_layer, fields={})
+        gdal.Polygonize( srcband, maskband, dst_layer, dst_field, options,
+        callback = prog_func )
 
 class MaskRaster(ASCIIRaster):
     """
@@ -445,10 +447,21 @@ class ShapeFile():
     """
     Wrapper class around gdal to handle ESRI Shapefiles.
     """
-    def __init__():
-        '''not implemented yet...'''
-        pass
-        
+    def __init__(self, dst_dir, dst_layername, fields={"ID":ogr.OFTInteger} ,srs=None):
+        """
+        Create an empty shape file without any features ...
+        dst_layername is the collection of files making the Shapefile bundle,
+        e.g. example.shp, example.dbf, example.shx.
+        srs - spatial reference system.
+        """
+        Format =  'ESRI Shapefile'
+        drv = ogr.GetDriverByName(Format)
+        dst_ds = drv.CreateDataSource(dst_dir)
+        dst_layer = dst_ds.CreateLayer(dst_layername, srs=srs)
+        for k,v in fields.iteritems():
+            fd = ogr.FieldDefn(k, v)
+            dst_layer.CreateField(fd)
+            
     def intersect(infile_1, infile_2, layerName_1, layerName_2, 
         fields={"ID":ogr.OFTInteger}, outfile="out.shp" ):
         """
@@ -457,7 +470,7 @@ class ShapeFile():
         By default field creates 'ID' with integer type for every interstect
         polygon. Others can be created too.
         """
-
+        print "not implemented yet..."
 
 class LandUseShp():
     """
