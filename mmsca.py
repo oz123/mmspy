@@ -281,6 +281,18 @@ class ASCIIRaster():
         driver = gdal.GetDriverByName(aformat)
         dst_ds = driver.CreateCopy(dst_filename, dst_ds)
         dst_ds = None
+        
+        def polygonize():
+            """
+            TODO: Copy CreateTempExceedPolygon from tools.py
+            """
+            print "Not implemeted yet..."
+            
+            prog_func = None 
+            maskband = None
+            options = []
+            gdal.Polygonize( srcband, maskband, dst_layer, dst_field, options,
+            callback = prog_func )
 
 class MaskRaster(ASCIIRaster):
     """
@@ -427,6 +439,24 @@ class MaskRaster(ASCIIRaster):
                     vertices)
         #self.mask.resize(self.Yrange.size, self.Xrange.size)
         #self.mask = np.flipud(self.mask)
+
+
+class ShapeFile():
+    """
+    Wrapper class around gdal to handle ESRI Shapefiles.
+    """
+    def __init__():
+        '''not implemented yet...'''
+        pass
+        
+    def intersect(infile_1, infile_2, layerName_1, layerName_2, 
+        fields={"ID":ogr.OFTInteger}, outfile="out.shp" ):
+        """
+        Intersect two shape files creating a new shape file.
+        'fields' is i dictionary containing field name and ogr type.
+        By default field creates 'ID' with integer type for every interstect
+        polygon. Others can be created too.
+        """
 
 
 class LandUseShp():
