@@ -10,7 +10,7 @@ The project was mostly written in Python during 2009. The code was badly organiz
 Two years later, I decided to re-write everything in an Object-Oriented Style, and enhance the perfomence 
 of the code leveraging more NumPy functions and skipping many Python 'for' loops.
 
-Unfortunately, due to unclarity regarding the Copyright of the input files, the are not included here. I intend
+Unfortunately, due to unclarity regarding the Copyright of the input files, they are not included here. I intend
 to include demo data sets in a short while, in the hope it will people understand what this code does.
 
 
