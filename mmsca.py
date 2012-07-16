@@ -460,14 +460,20 @@ class ShapeFile():
         srs - spatial reference system.
         """
         #import pdb; pdb.set_trace()
-        Format =  'ESRI Shapefile'
-        drv = ogr.GetDriverByName(Format)
-        self.dst_ds = drv.CreateDataSource(dst_dir)
-        ### need to put a test the dst_layername does not exist
-        self.dst_layer = self.dst_ds.CreateLayer(dst_layername, srs=srs)
-        for k,v in fields.iteritems():
-            fd = ogr.FieldDefn(k, v)
-            self.dst_layer.CreateField(fd)
+        try:
+            gdal.PushErrorHandler( 'QuietErrorHandler' )
+            dst_ds = ogr.Open( dst_layername, update=1 )
+            print dst_layername, " opened in update mode..."
+            gdal.PopErrorHandler()
+        except:
+            Format =  'ESRI Shapefile'
+            drv = ogr.GetDriverByName(Format)
+            self.dst_ds = drv.CreateDataSource(dst_dir)
+            self.dst_layer = self.dst_ds.CreateLayer(dst_layername, srs=srs)
+            print "created ", dst_layername
+            for k,v in fields.iteritems():
+                fd = ogr.FieldDefn(k, v)
+                self.dst_layer.CreateField(fd)
             
     def intersect(infile_1, infile_2, layerName_1, layerName_2, 
         fields={"ID":ogr.OFTInteger}, outfile="out.shp" ):
