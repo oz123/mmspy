@@ -282,20 +282,25 @@ class ASCIIRaster():
         dst_ds = driver.CreateCopy(dst_filename, dst_ds)
         dst_ds = None
         
-    def polygonize(src_raster, dst_layer, dst_fields={}):
+    def polygonize(self, src_raster, dst_layer, dst_field_num):
         """
         ShapeFile(".", dst_layer, fields={"ID":ogr.OFTInteger, "Exceedance":ogr.OFTInteger})
+        src_raster - path to ascii raster
+        dst_layer - shapefile to  create items in
+        dst_field_num - number of field in db.
+        example call:
+        ras.polygonize("SzenarioA/ScALayout2/TCE_in_gw_exceedance_bool.asc", A.dst_layer, 1)
         """
-        print "Not implemeted yet..."
         src_ds = gdal.Open(src_raster)
         srcband = src_ds.GetRasterBand(1) 
+        import pdb; pdb.set_trace()
         prog_func = None 
-        maskband = None #optional
+        maskband = None 
         options = []
-        ShapeFile(".", dst_layer, fields={})
         gdal.Polygonize( srcband, maskband, dst_layer, dst_field, options,
         callback = prog_func )
-
+        dst_layer.SyncToDisk()
+        
 class MaskRaster(ASCIIRaster):
     """
     Define a Mask raster containing Zero for points outside the area
@@ -454,13 +459,15 @@ class ShapeFile():
         e.g. example.shp, example.dbf, example.shx.
         srs - spatial reference system.
         """
+        #import pdb; pdb.set_trace()
         Format =  'ESRI Shapefile'
         drv = ogr.GetDriverByName(Format)
-        dst_ds = drv.CreateDataSource(dst_dir)
-        dst_layer = dst_ds.CreateLayer(dst_layername, srs=srs)
+        self.dst_ds = drv.CreateDataSource(dst_dir)
+        ### need to put a test the dst_layername does not exist
+        self.dst_layer = self.dst_ds.CreateLayer(dst_layername, srs=srs)
         for k,v in fields.iteritems():
             fd = ogr.FieldDefn(k, v)
-            dst_layer.CreateField(fd)
+            self.dst_layer.CreateField(fd)
             
     def intersect(infile_1, infile_2, layerName_1, layerName_2, 
         fields={"ID":ogr.OFTInteger}, outfile="out.shp" ):

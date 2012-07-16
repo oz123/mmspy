@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-  
-#        This file is the main code of the conflictAnalysis tool developed in DSITE group
-#        Center for Applied Geosciences, University of Tuebingen, Germany
-#        The algorithm was created by Max Morio, and written in python by Oz Nahum
+#       This file is the main code of the conflictAnalysis tool developed in DSITE group
+#       Center for Applied Geosciences, University of Tuebingen, Germany
+#       The algorithm was created by Max Morio, and written in python by Oz Nahum
 #       and Max Morio.
 #
 #       This program is free software; you can redistribute it and/or modify
