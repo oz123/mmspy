@@ -28,6 +28,7 @@ most of the functios are in the module mmsca.py
 import stat,sys,os,shutil 
 import mmsca
 import numpy as np
+from osgeo import ogr
 
 def parseArgs():
     """
@@ -143,6 +144,9 @@ def calculate_exceedance(proj, cont, cont_name, target):
     print "Boolean exceedance  raster created in: ", exceedance
     eraster.writer(exceedance, np.ma.filled(eraster.data, fill_value=-9999), (minX-xres, maxY+yres), xres, yres, Flip = False)
     return eraster
+
+def polygonize_exceedance(cont):
+    pass
     
 def main(conflicttype):
     """
@@ -179,12 +183,24 @@ def main(conflicttype):
     populateShpfileDbase(scenario,zwert) 
     # import pdb; pdb.set_trace()
     # create targets, cut raster to cutline, calculate the exceedances   
+    # write ascii raster for each exceedance and convert that raster to
+    # shape file
     for cont in zwert.contrasternames:
         cont_target = create_target(scenario, proj, cont.replace(".aux",""), xres, yres)
         cont_raster = cut_to_cutline(proj, cont)
         # calculate exceedance now works directly on the arrays in memory
         calculate_exceedance(proj, cont_raster,  cont.replace(".aux","") , cont_target)
+        wdir= proj.aktscenario+'/'+proj.aktlayout#+'/'+proj.aktlayout
+        layer = cont.replace(".aux","")+"_exceedance"
+        # TOOD: add srs information !!!
+        exceedance_shp = mmsca.ShapeFile(wdir,layer,fields={"ID":ogr.OFTInteger, "Exceedance":ogr.OFTInteger})
+        exceedance_shp.dst_layer.SyncToDisk()
+        exceedance_ras = mmsca.ASCIIRaster()
+        exceedance_ras.polygonize("SzenarioA/ScALayout2/" \
+                +cont.replace(".aux","_exceedance_bool.asc"), exceedance_shp.dst_layer, 1)
         print "**************\n"
+        
+
 
 if __name__ == '__main__':
     conflicttype=parseArgs()
@@ -196,8 +212,53 @@ if __name__ == '__main__':
 
 #usage:
 #:~/Desktop/PROJECT_MMSpy/Projekt$ ./confanalysis.py . 0
-# output:
+## output:
+
 #conflicttype  0
-#SzenarioA ScALayout1
-#Shape file copied to : SzenarioA/ScALayout1/ScALayout1_tgl.shp
+#SzenarioA ScALayout2
 #Anzahl Kontaminanten (B und GW):  4
+#Shape file copied to : SzenarioA/ScALayout2/ScALayout2_tgl.shp
+#Land Uses Raster created in:  /home/ozdeb/Desktop/PROJECT_MMSpy/Projekt/SzenarioA/ScALayout2/ScALayout2.asc
+#Target Raster created in:  /home/ozdeb/Desktop/PROJECT_MMSpy/Projekt/SzenarioA/ScALayout2/PAK30_B_target.asc
+#Extent des Bewertungsgebiets (area_of_interest):
+#(3366307.654296875, 3367789.362121582, 5813454.151306152, 5814844.734924316)
+#UR: 3367789.36212 5814844.73492
+#LL: 3366307.6543 5813454.15131
+#Cutline  Raster created in:  /home/ozdeb/Desktop/PROJECT_MMSpy/Projekt/SzenarioA/ScALayout2/PAK30_B_cutline.asc
+#Absolute exceedance  raster created in:  /home/ozdeb/Desktop/PROJECT_MMSpy/Projekt/SzenarioA/ScALayout2/PAK30_B_exceedance_abs.asc
+#Boolean exceedance  raster created in:  /home/ozdeb/Desktop/PROJECT_MMSpy/Projekt/SzenarioA/ScALayout2/PAK30_B_exceedance_bool.asc
+#created SzenarioA/ScALayout2/PAK30_B_exceedance
+#**************
+
+#Target Raster created in:  /home/ozdeb/Desktop/PROJECT_MMSpy/Projekt/SzenarioA/ScALayout2/PAK60_B_target.asc
+#Extent des Bewertungsgebiets (area_of_interest):
+#(3366307.654296875, 3367789.362121582, 5813454.151306152, 5814844.734924316)
+#UR: 3367789.36212 5814844.73492
+#LL: 3366307.6543 5813454.15131
+#Cutline  Raster created in:  /home/ozdeb/Desktop/PROJECT_MMSpy/Projekt/SzenarioA/ScALayout2/PAK60_B_cutline.asc
+#Absolute exceedance  raster created in:  /home/ozdeb/Desktop/PROJECT_MMSpy/Projekt/SzenarioA/ScALayout2/PAK60_B_exceedance_abs.asc
+#Boolean exceedance  raster created in:  /home/ozdeb/Desktop/PROJECT_MMSpy/Projekt/SzenarioA/ScALayout2/PAK60_B_exceedance_bool.asc
+#created SzenarioA/ScALayout2/PAK60_B_exceedance
+#**************
+
+#Target Raster created in:  /home/ozdeb/Desktop/PROJECT_MMSpy/Projekt/SzenarioA/ScALayout2/PCE_in_gw_target.asc
+#Extent des Bewertungsgebiets (area_of_interest):
+#(3366307.654296875, 3367789.362121582, 5813454.151306152, 5814844.734924316)
+#UR: 3367789.36212 5814844.73492
+#LL: 3366307.6543 5813454.15131
+#Cutline  Raster created in:  /home/ozdeb/Desktop/PROJECT_MMSpy/Projekt/SzenarioA/ScALayout2/PCE_in_gw_cutline.asc
+#Absolute exceedance  raster created in:  /home/ozdeb/Desktop/PROJECT_MMSpy/Projekt/SzenarioA/ScALayout2/PCE_in_gw_exceedance_abs.asc
+#Boolean exceedance  raster created in:  /home/ozdeb/Desktop/PROJECT_MMSpy/Projekt/SzenarioA/ScALayout2/PCE_in_gw_exceedance_bool.asc
+#created SzenarioA/ScALayout2/PCE_in_gw_exceedance
+#**************
+
+#Target Raster created in:  /home/ozdeb/Desktop/PROJECT_MMSpy/Projekt/SzenarioA/ScALayout2/TCE_in_gw_target.asc
+#Extent des Bewertungsgebiets (area_of_interest):
+#(3366307.654296875, 3367789.362121582, 5813454.151306152, 5814844.734924316)
+#UR: 3367789.36212 5814844.73492
+#LL: 3366307.6543 5813454.15131
+#Cutline  Raster created in:  /home/ozdeb/Desktop/PROJECT_MMSpy/Projekt/SzenarioA/ScALayout2/TCE_in_gw_cutline.asc
+#Absolute exceedance  raster created in:  /home/ozdeb/Desktop/PROJECT_MMSpy/Projekt/SzenarioA/ScALayout2/TCE_in_gw_exceedance_abs.asc
+#Boolean exceedance  raster created in:  /home/ozdeb/Desktop/PROJECT_MMSpy/Projekt/SzenarioA/ScALayout2/TCE_in_gw_exceedance_bool.asc
+#created SzenarioA/ScALayout2/TCE_in_gw_exceedance
+#**************

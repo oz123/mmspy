@@ -293,11 +293,10 @@ class ASCIIRaster():
         """
         src_ds = gdal.Open(src_raster)
         srcband = src_ds.GetRasterBand(1) 
-        import pdb; pdb.set_trace()
         prog_func = None 
         maskband = None 
         options = []
-        gdal.Polygonize( srcband, maskband, dst_layer, dst_field, options,
+        gdal.Polygonize( srcband, maskband, dst_layer, dst_field_num, options,
         callback = prog_func )
         dst_layer.SyncToDisk()
         
@@ -459,18 +458,15 @@ class ShapeFile():
         e.g. example.shp, example.dbf, example.shx.
         srs - spatial reference system.
         """
-        #import pdb; pdb.set_trace()
-        try:
-            gdal.PushErrorHandler( 'QuietErrorHandler' )
+        if os.path.exists(os.path.abspath(dst_dir+"/"+dst_layername+".shp")):
+            print "updating ", os.path.abspath(dst_dir+"/"+dst_layername+".shp")
             dst_ds = ogr.Open( dst_layername, update=1 )
-            print dst_layername, " opened in update mode..."
-            gdal.PopErrorHandler()
-        except:
+        else:
             Format =  'ESRI Shapefile'
             drv = ogr.GetDriverByName(Format)
             self.dst_ds = drv.CreateDataSource(dst_dir)
             self.dst_layer = self.dst_ds.CreateLayer(dst_layername, srs=srs)
-            print "created ", dst_layername
+            print "created "+dst_dir+"/"+dst_layername
             for k,v in fields.iteritems():
                 fd = ogr.FieldDefn(k, v)
                 self.dst_layer.CreateField(fd)
