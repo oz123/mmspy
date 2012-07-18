@@ -28,7 +28,7 @@ most of the functios are in the module mmsca.py
 import stat,sys,os,shutil 
 import mmsca
 import numpy as np
-from osgeo import ogr
+from osgeo import ogr, osr
 
 def parseArgs():
     """
@@ -181,10 +181,14 @@ def main(conflicttype):
     # based on the land use codeG
     scenario.layer.ResetReading()
     populateShpfileDbase(scenario,zwert) 
-    # import pdb; pdb.set_trace()
+    
     # create targets, cut raster to cutline, calculate the exceedances   
     # write ascii raster for each exceedance and convert that raster to
     # shape file
+    gauss_krueger_z4 = 31468
+    srs = osr.SpatialReference()
+    srs.ImportFromEPSG(gauss_krueger_z4) 
+    
     for cont in zwert.contrasternames:
         cont_target = create_target(scenario, proj, cont.replace(".aux",""), xres, yres)
         cont_raster = cut_to_cutline(proj, cont)
@@ -192,8 +196,8 @@ def main(conflicttype):
         calculate_exceedance(proj, cont_raster,  cont.replace(".aux","") , cont_target)
         wdir= proj.aktscenario+'/'+proj.aktlayout#+'/'+proj.aktlayout
         layer = cont.replace(".aux","")+"_exceedance"
-        # TOOD: add srs information !!!
-        exceedance_shp = mmsca.ShapeFile(wdir,layer,fields={"ID":ogr.OFTInteger, "Exceedance":ogr.OFTInteger})
+        fields_e={"ID":ogr.OFTInteger, "Exceedance":ogr.OFTInteger}
+        exceedance_shp = mmsca.ShapeFile(wdir,layer,fields=fields_e, srs=srs)
         exceedance_shp.dst_layer.SyncToDisk()
         exceedance_ras = mmsca.ASCIIRaster()
         exceedance_ras.polygonize("SzenarioA/ScALayout2/" \
