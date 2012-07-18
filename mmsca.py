@@ -460,7 +460,7 @@ class ShapeFile():
         """
         if os.path.exists(os.path.abspath(dst_dir+"/"+dst_layername+".shp")):
             print "updating ", os.path.abspath(dst_dir+"/"+dst_layername+".shp")
-            dst_ds = ogr.Open( dst_layername, update=1 )
+            self.dst_ds = ogr.Open( dst_layername, update=1 )
         else:
             Format =  'ESRI Shapefile'
             drv = ogr.GetDriverByName(Format)
@@ -471,16 +471,58 @@ class ShapeFile():
                 fd = ogr.FieldDefn(k, v)
                 self.dst_layer.CreateField(fd)
             
-    def intersect(infile_1, infile_2, layerName_1, layerName_2, 
-        fields={"ID":ogr.OFTInteger}, outfile="out.shp" ):
+    def intersect(self, infile_1, layerName_1, 
+        fields={"ID":ogr.OFTInteger}, f_callbacks=[], outfile="out.shp", srs=None):
         """
         Intersect two shape files creating a new shape file.
         'fields' is i dictionary containing field name and ogr type.
         By default field creates 'ID' with integer type for every interstect
         polygon. Others can be created too.
+        
+        f_callbacks - a list of functions to be excuted
+        USAGE:
+        def incr_ID(fieldUID):
+            return fieldUID+1
+        
+        exceedance_shp.intersect(landUsesShp, landUsesShp,  fields={"ID":ogr.OFTInteger},
+        f_callbacks=[incr_ID])
+        
+        for each field created we map a callback function that populates the right
+        value ...
         """
-        print "not implemented yet..."
-
+        if outfile is not None:
+            driver = ogr.GetDriverByName("ESRI Shapefile") #[2] 
+            dst_Source = driver.CreateDataSource(outfile)
+            dst_layer = dst_Source.CreateLayer(outfile, geom_type=ogr.wkbPolygon, srs=srs) 
+        
+        for k,v in fields.iteritems():
+                fd = ogr.FieldDefn(k, v)
+                dst_layer.CreateField(fd)
+                
+        ID = 0
+        for i in range(LandUses.GetFeatureCount()):
+            Whon = LandUses.GetNextFeature()
+            for j in range(PAK_B.GetFeatureCount()):
+                Excidance = PAK_B.GetFeature(j)
+                ExcidanceYN = Excidance.GetField(0)
+                if ExcidanceYN == 1:
+                    a_exi = Excidance.GetGeometryRef()
+                    a_Whon = Whon.GetGeometryRef()
+                    inter = a_exi.Intersection(a_Whon)
+                    if inter.GetArea() != 0.0:
+                        Kategorie = Whon.GetField(1)
+                        LANDUSECODE = Kategorie
+                        AREA = inter.GetArea()
+                        polygon = ogr.CreateGeometryFromWkt(str(inter))
+                        # Set geometry
+                        feature.SetGeometryDirectly(polygon)
+                        feature.SetField('ID', ID) #[15]
+                        feature.SetField('AREA', AREA)
+                        feature.SetField('CATEGORIE', LANDUSECODE)
+                        dst_layer.CreateFeature(feature)
+                        ID = ID + 1
+        
+        
 class LandUseShp():
     """
     Get landuses from shapefile, create landuses raster
@@ -499,30 +541,7 @@ class LandUseShp():
             self.createcopy()
             self.dataSource = driver.Open(self.copyfilepath, 1)
         else: self.dataSource = driver.Open(shapefilepath, 0)
-        self.layer = self.dataSource.GetLayer()
-        self.NPolygons = self.layer.GetFeatureCount()
-        # store vertices of each polygon      
-        self.Boundaries = [""]*self.NPolygons   
-        feature=self.layer.GetFeature(0)
-        self.fields = feature.keys()
-        self.layer.ResetReading()
-        for polygon in range(self.NPolygons):
-            area = self.layer.GetFeature(polygon)
-            name = area.GetField(0)
-            category = area.GetField(1)
-            self.LandUses.append(name)
-            self.Codes.append(category)
-            geometry = area.GetGeometryRef()
-            boundary_raw = str(geometry.GetBoundary())
-            #remove tail and head
-            boundary = boundary_raw[12:-1]
-            boundary = boundary.split(',')
-            #convert each coordinate from string to float
-            for idx, point in enumerate(boundary):
-                boundary[idx] = point.split()
-            boundingvertices = np.asarray(boundary, dtype = np.float64)
-            self.Boundaries[polygon] = boundingvertices
-    
+        
     def createcopy(self):
         """
         copy the shape file to output file path
