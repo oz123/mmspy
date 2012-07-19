@@ -479,14 +479,22 @@ class ShapeFile():
                 self.dst_layer.CreateField(fd)
                 self.dst_layer.SyncToDisk()
     
-    def intersect(self, in_dir, in_layer, condition 
-        fields={"ID":ogr.OFTInteger}, feature_callbacks=[], dst_dir='.', dst_layer="out", srs=None):
+    def select_polygons(self, condi):
+        """
+        Select polygons in layers based on a certion condition
+        """
+        pass 
+        
+    def intersect(self, in_dir, in_layer, condition_func, condition_field ,
+        fields, feature_callbacks=[], dst_dir='.', dst_layer="out", srs=None):
         """
         Intersect two shape files creating a new shape file.
         'fields' is i dictionary containing field name and ogr type.
         By default field creates 'ID' with integer type for every interstect
         polygon. Others can be created too.
         A = mmsca.ShapeFile("SzenarioA/ScALayout2/sa","TCE_in_gw_exceedance")
+        A.intersect("SzenarioA/ScALayout2/", "ScALayout2_tgl",r'x==1' ,1, fields={"AREA":ogr.OFTReal},feature_callbacks=[r"intersection.GetArea()"] )
+
         condition - a call back function which decided wheter to check intersection
         f_callbacks - a list of functions to be excuted
         USAGE:
@@ -502,56 +510,39 @@ class ShapeFile():
         # fancy recursion: the method calls the init method of the object
         # it's cool that is possible, but is it O.K.?
         if dst_layer is not None:
-             outfile = ShapeFile(dst_dir,dst_layer)
-             outfile.dst_layer.SyncToDisk()
-        #import pdb; pdb.set_trace()
-        
+             outfile = ShapeFile(dst_dir,dst_layer,fields=fields)
+             outfile.dst_layer.SyncToDisk()        
         infile = ShapeFile(in_dir, in_layer)
         
         feature = ogr.Feature(outfile.dst_layer.GetLayerDefn())
-        print infile.dst_layer.GetFeatureCount()
-        print self.dst_layer.GetFeatureCount()
-        
-        ID = 0
+        # select all polygons with condition existing
+        positives = []
         
         for item in range(self.dst_layer.GetFeatureCount()):
             featureA = self.dst_layer.GetNextFeature()
-            featureA_geom = featureA.GetGeometryRef()
-            for item2 in range(infile.dst_layer.GetFeatureCount()):
+            x = featureA.GetField(condition_field)
+            if eval(condition_func):  
+                positives.append(featureA)
+        #print "Positive polygons:", len(positives)
+        for x,polygon in enumerate(positives):
+            #import pdb; pdb.set_trace()
+            for item in range(infile.dst_layer.GetFeatureCount()):
                 featureB = infile.dst_layer.GetNextFeature()
-                featureB_geom = featureB.GetGeometryRef()           
-                intersection = featureB_geom.Intersection(featureA_geom)
-                if intersection.GetArea() > 0.0:
-                    #import pdb; pdb.set_trace()
-                    polygon = ogr.CreateGeometryFromWkt(str(intersection))
-                    feature.SetGeometryDirectly(polygon)
-                    feature.SetField('ID', ID)
+                featureB_geom = featureB.GetGeometryRef() 
+                featureA_geom = positives[x].GetGeometryRef()          
+                intersection = featureA_geom.Intersection(featureB_geom)
+                if intersection.GetArea() != 0.0:
+                    new_polygon = ogr.CreateGeometryFromWkt(str(intersection))
+                    feature.SetGeometryDirectly(new_polygon)
+                    
+                    for k,v in zip(fields.keys(),feature_callbacks):
+                        feature.SetField(k, eval(v))
+                    
                     outfile.dst_layer.CreateFeature(feature)
             infile.dst_layer.ResetReading()
         self.dst_layer.ResetReading()
         outfile.dst_layer.SyncToDisk()
-        #for i in range(LandUses.GetFeatureCount()):
-            #Whon = LandUses.GetNextFeature()
-            #for j in range(PAK_B.GetFeatureCount()):
-                #Excidance = PAK_B.GetFeature(j)
-                #ExcidanceYN = Excidance.GetField(0)
-                #if ExcidanceYN == 1:
-                    #a_exi = Excidance.GetGeometryRef()
-                    #a_Whon = Whon.GetGeometryRef()
-                    #inter = a_exi.Intersection(a_Whon)
-                    #if inter.GetArea() != 0.0:
-                        #Kategorie = Whon.GetField(1)
-                        #LANDUSECODE = Kategorie
-                        #AREA = inter.GetArea()
-                        #polygon = ogr.CreateGeometryFromWkt(str(inter))
-                         #Set geometry
-                        #feature.SetGeometryDirectly(polygon)
-                        #feature.SetField('ID', ID) #[15]
-                        #feature.SetField('AREA', AREA)
-                        #feature.SetField('CATEGORIE', LANDUSECODE)
-                        #dst_layer.CreateFeature(feature)
-                        #ID = ID + 1
-        
+
         
 class LandUseShp():
     """
