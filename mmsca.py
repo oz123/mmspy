@@ -450,6 +450,7 @@ class MaskRaster(ASCIIRaster):
 class ShapeFile():
     """
     Wrapper class around gdal to handle ESRI Shapefiles.
+    A = mmsca.ShapeFile("SzenarioA/ScALayout2/","TCE_in_gw_exceedance")
     """
     def __init__(self, dst_dir, dst_layername, fields={"ID":ogr.OFTInteger} ,srs=None):
         """
@@ -459,26 +460,34 @@ class ShapeFile():
         srs - spatial reference system.
         """
         if os.path.exists(os.path.abspath(dst_dir+"/"+dst_layername+".shp")):
-            print "updating ", os.path.abspath(dst_dir+"/"+dst_layername+".shp")
-            self.dst_ds = ogr.Open( dst_layername, update=1 )
+            filename = os.path.abspath(dst_dir+"/"+dst_layername+".shp")
+            self.dst_ds = ogr.Open( filename, update=1 )
+            if self.dst_ds is not None:
+                print "Updating ", filename
+            else: 
+                print "Could not open ", filename
+            self.dst_layer = self.dst_ds.GetLayerByName(dst_layername)
         else:
             Format =  'ESRI Shapefile'
             drv = ogr.GetDriverByName(Format)
             self.dst_ds = drv.CreateDataSource(dst_dir)
             self.dst_layer = self.dst_ds.CreateLayer(dst_layername, srs=srs)
             print "created "+dst_dir+"/"+dst_layername
+            print fields
             for k,v in fields.iteritems():
                 fd = ogr.FieldDefn(k, v)
                 self.dst_layer.CreateField(fd)
-            
-    def intersect(self, infile_1, layerName_1, 
-        fields={"ID":ogr.OFTInteger}, f_callbacks=[], outfile="out.shp", srs=None):
+                self.dst_layer.SyncToDisk()
+    
+    def intersect(self, in_dir, in_layer, condition 
+        fields={"ID":ogr.OFTInteger}, feature_callbacks=[], dst_dir='.', dst_layer="out", srs=None):
         """
         Intersect two shape files creating a new shape file.
         'fields' is i dictionary containing field name and ogr type.
         By default field creates 'ID' with integer type for every interstect
         polygon. Others can be created too.
-        
+        A = mmsca.ShapeFile("SzenarioA/ScALayout2/sa","TCE_in_gw_exceedance")
+        condition - a call back function which decided wheter to check intersection
         f_callbacks - a list of functions to be excuted
         USAGE:
         def incr_ID(fieldUID):
@@ -490,37 +499,58 @@ class ShapeFile():
         for each field created we map a callback function that populates the right
         value ...
         """
-        if outfile is not None:
-            driver = ogr.GetDriverByName("ESRI Shapefile") #[2] 
-            dst_Source = driver.CreateDataSource(outfile)
-            dst_layer = dst_Source.CreateLayer(outfile, geom_type=ogr.wkbPolygon, srs=srs) 
+        # fancy recursion: the method calls the init method of the object
+        # it's cool that is possible, but is it O.K.?
+        if dst_layer is not None:
+             outfile = ShapeFile(dst_dir,dst_layer)
+             outfile.dst_layer.SyncToDisk()
+        #import pdb; pdb.set_trace()
         
-        for k,v in fields.iteritems():
-                fd = ogr.FieldDefn(k, v)
-                dst_layer.CreateField(fd)
-                
+        infile = ShapeFile(in_dir, in_layer)
+        
+        feature = ogr.Feature(outfile.dst_layer.GetLayerDefn())
+        print infile.dst_layer.GetFeatureCount()
+        print self.dst_layer.GetFeatureCount()
+        
         ID = 0
-        for i in range(LandUses.GetFeatureCount()):
-            Whon = LandUses.GetNextFeature()
-            for j in range(PAK_B.GetFeatureCount()):
-                Excidance = PAK_B.GetFeature(j)
-                ExcidanceYN = Excidance.GetField(0)
-                if ExcidanceYN == 1:
-                    a_exi = Excidance.GetGeometryRef()
-                    a_Whon = Whon.GetGeometryRef()
-                    inter = a_exi.Intersection(a_Whon)
-                    if inter.GetArea() != 0.0:
-                        Kategorie = Whon.GetField(1)
-                        LANDUSECODE = Kategorie
-                        AREA = inter.GetArea()
-                        polygon = ogr.CreateGeometryFromWkt(str(inter))
-                        # Set geometry
-                        feature.SetGeometryDirectly(polygon)
-                        feature.SetField('ID', ID) #[15]
-                        feature.SetField('AREA', AREA)
-                        feature.SetField('CATEGORIE', LANDUSECODE)
-                        dst_layer.CreateFeature(feature)
-                        ID = ID + 1
+        
+        for item in range(self.dst_layer.GetFeatureCount()):
+            featureA = self.dst_layer.GetNextFeature()
+            featureA_geom = featureA.GetGeometryRef()
+            for item2 in range(infile.dst_layer.GetFeatureCount()):
+                featureB = infile.dst_layer.GetNextFeature()
+                featureB_geom = featureB.GetGeometryRef()           
+                intersection = featureB_geom.Intersection(featureA_geom)
+                if intersection.GetArea() > 0.0:
+                    #import pdb; pdb.set_trace()
+                    polygon = ogr.CreateGeometryFromWkt(str(intersection))
+                    feature.SetGeometryDirectly(polygon)
+                    feature.SetField('ID', ID)
+                    outfile.dst_layer.CreateFeature(feature)
+            infile.dst_layer.ResetReading()
+        self.dst_layer.ResetReading()
+        outfile.dst_layer.SyncToDisk()
+        #for i in range(LandUses.GetFeatureCount()):
+            #Whon = LandUses.GetNextFeature()
+            #for j in range(PAK_B.GetFeatureCount()):
+                #Excidance = PAK_B.GetFeature(j)
+                #ExcidanceYN = Excidance.GetField(0)
+                #if ExcidanceYN == 1:
+                    #a_exi = Excidance.GetGeometryRef()
+                    #a_Whon = Whon.GetGeometryRef()
+                    #inter = a_exi.Intersection(a_Whon)
+                    #if inter.GetArea() != 0.0:
+                        #Kategorie = Whon.GetField(1)
+                        #LANDUSECODE = Kategorie
+                        #AREA = inter.GetArea()
+                        #polygon = ogr.CreateGeometryFromWkt(str(inter))
+                         #Set geometry
+                        #feature.SetGeometryDirectly(polygon)
+                        #feature.SetField('ID', ID) #[15]
+                        #feature.SetField('AREA', AREA)
+                        #feature.SetField('CATEGORIE', LANDUSECODE)
+                        #dst_layer.CreateFeature(feature)
+                        #ID = ID + 1
         
         
 class LandUseShp():
