@@ -520,7 +520,7 @@ class ShapeFile():
         
         for item in range(self.dst_layer.GetFeatureCount()):
             featureA = self.dst_layer.GetNextFeature()
-            x = featureA.GetField(condition_field)
+            #x = featureA.GetField(condition_field)
             if eval(condition_func):  
                 positives.append(featureA)
         #print "Positive polygons:", len(positives)
@@ -561,8 +561,32 @@ class LandUseShp():
             self.copyfilepath=copyfile
             self.createcopy()
             self.dataSource = driver.Open(self.copyfilepath, 1)
-        else: self.dataSource = driver.Open(shapefilepath, 0)
-        
+        else: 
+            self.dataSource = driver.Open(shapefilepath, 0)
+        self.layer = self.dataSource.GetLayer()
+        self.NPolygons = self.layer.GetFeatureCount()
+        # store vertices of each polygon
+        self.Boundaries = [""]*self.NPolygons
+        feature=self.layer.GetFeature(0)
+        self.fields = feature.keys()
+        self.layer.ResetReading()
+        for polygon in range(self.NPolygons):
+            area = self.layer.GetFeature(polygon)
+            name = area.GetField(0)
+            category = area.GetField(1)
+            self.LandUses.append(name)
+            self.Codes.append(category)
+            geometry = area.GetGeometryRef()
+            boundary_raw = str(geometry.GetBoundary())
+            #remove tail and head
+            boundary = boundary_raw[12:-1]
+            boundary = boundary.split(',')
+            #convert each coordinate from string to float
+            for idx, point in enumerate(boundary):
+                boundary[idx] = point.split()
+            boundingvertices = np.asarray(boundary, dtype = np.float64)
+            self.Boundaries[polygon] = boundingvertices
+
     def createcopy(self):
         """
         copy the shape file to output file path
