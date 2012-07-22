@@ -29,6 +29,7 @@ import stat,sys,os,shutil
 import mmsca
 import numpy as np
 from osgeo import ogr, osr
+from collections import OrderedDict
 
 def parseArgs():
     """
@@ -189,6 +190,10 @@ def main(conflicttype):
     srs = osr.SpatialReference()
     srs.ImportFromEPSG(gauss_krueger_z4) 
     
+    
+    fields_e=OrderedDict([("ID",ogr.OFTInteger), ("Exceedance",ogr.OFTInteger)])
+    fields_o=OrderedDict([("AREA",ogr.OFTReal), ("KATEGORIE",ogr.OFTInteger)])
+        
     for cont in zwert.contrasternames:
         cont_target = create_target(scenario, proj, cont.replace(".aux",""), xres, yres)
         cont_raster = cut_to_cutline(proj, cont)
@@ -196,15 +201,18 @@ def main(conflicttype):
         calculate_exceedance(proj, cont_raster,  cont.replace(".aux","") , cont_target)
         wdir= proj.aktscenario+'/'+proj.aktlayout#+'/'+proj.aktlayout
         layer = cont.replace(".aux","")+"_exceedance"
-        fields_e={"ID":ogr.OFTInteger, "Exceedance":ogr.OFTInteger}
+        
         exceedance_shp = mmsca.ShapeFile(wdir,layer,fields=fields_e, srs=srs)
         exceedance_shp.dst_layer.SyncToDisk()
         exceedance_ras = mmsca.ASCIIRaster()
         exceedance_ras.polygonize("SzenarioA/ScALayout2/" \
                 +cont.replace(".aux","_exceedance_bool.asc"), exceedance_shp.dst_layer, 1)
+        layer = cont.replace(".aux","")+"_intersected_exceedance"
+        layer="SzenarioA/ScALayout2/"+layer
+        exceedance_shp.intersect("SzenarioA/ScALayout2/", "ScALayout2_tgl",r'featureA.GetField(condition_field)==1' ,
+        1, fields=fields_o,feature_callbacks=[r"intersection.GetArea()"], dst_layer=layer,srs=srs )
         print "**************\n"
-        
-
+        #import pdb; pdb.set_trace()
 
 if __name__ == '__main__':
     conflicttype=parseArgs()

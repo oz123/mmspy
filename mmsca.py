@@ -33,6 +33,7 @@ import shutil
 from matplotlib import nxutils
 import numpy as np
 import csv
+from collections import OrderedDict
 
 
 def world2Pixel(geoMatrix, x, y):
@@ -459,6 +460,7 @@ class ShapeFile():
         e.g. example.shp, example.dbf, example.shx.
         srs - spatial reference system.
         """
+        # TODO: if updating file, add fields if they don't exist!
         if os.path.exists(os.path.abspath(dst_dir+"/"+dst_layername+".shp")):
             filename = os.path.abspath(dst_dir+"/"+dst_layername+".shp")
             self.dst_ds = ogr.Open( filename, update=1 )
@@ -507,10 +509,15 @@ class ShapeFile():
         for each field created we map a callback function that populates the right
         value ...
         """
+        
+        if not isinstance(fields, OrderedDict):
+            print "WARNING:, fields is not an OrderedDict, Can't guarantee order"\
+            +" of fields..."
+                
         # fancy recursion: the method calls the init method of the object
         # it's cool that is possible, but is it O.K.?
         if dst_layer is not None:
-             outfile = ShapeFile(dst_dir,dst_layer,fields=fields)
+             outfile = ShapeFile(dst_dir,dst_layer,fields=fields, srs=srs)
              outfile.dst_layer.SyncToDisk()        
         infile = ShapeFile(in_dir, in_layer)
         
