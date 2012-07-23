@@ -145,9 +145,6 @@ def calculate_exceedance(proj, cont, cont_name, target):
     print "Boolean exceedance  raster created in: ", exceedance
     eraster.writer(exceedance, np.ma.filled(eraster.data, fill_value=-9999), (minX-xres, maxY+yres), xres, yres, Flip = False)
     return eraster
-
-def polygonize_exceedance(cont):
-    pass
     
 def main(conflicttype):
     """
@@ -201,19 +198,22 @@ def main(conflicttype):
         calculate_exceedance(proj, cont_raster,  cont.replace(".aux","") , cont_target)
         wdir= proj.aktscenario+'/'+proj.aktlayout#+'/'+proj.aktlayout
         layer = cont.replace(".aux","")+"_exceedance"
-        
         exceedance_shp = mmsca.ShapeFile(wdir,layer,fields=fields_e, srs=srs)
         exceedance_shp.dst_layer.SyncToDisk()
         exceedance_ras = mmsca.ASCIIRaster()
-        exceedance_ras.polygonize("SzenarioA/ScALayout2/" \
+
+        exceedance_ras.polygonize(wdir+"/" \
                 +cont.replace(".aux","_exceedance_bool.asc"), exceedance_shp.dst_layer, 1)
+                
         layer = cont.replace(".aux","")+"_intersected_exceedance"
         layer="SzenarioA/ScALayout2/"+layer
-        exceedance_shp.intersect("SzenarioA/ScALayout2/", "ScALayout2_tgl",r'featureA.GetField(condition_field)==1' ,
-        1, fields=fields_o,feature_callbacks=[r"intersection.GetArea()"], dst_layer=layer,srs=srs )
+        sel_func =r'featureA.GetField(condition_field)==1'
+        feat_cb=[r"intersection.GetArea()", r"featureB.GetField(1)"]
+        
+        exceedance_shp.intersect(wdir+"/", "ScALayout2_tgl", sel_func,
+            1, fields=fields_o,feature_callbacks=feat_cb, dst_file=layer,srs=srs )
         print "**************\n"
-        #import pdb; pdb.set_trace()
-
+        
 if __name__ == '__main__':
     conflicttype=parseArgs()
     main(conflicttype)

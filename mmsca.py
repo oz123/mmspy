@@ -460,6 +460,7 @@ class ShapeFile():
         e.g. example.shp, example.dbf, example.shx.
         srs - spatial reference system.
         """
+        
         # TODO: if updating file, add fields if they don't exist!
         if os.path.exists(os.path.abspath(dst_dir+"/"+dst_layername+".shp")):
             filename = os.path.abspath(dst_dir+"/"+dst_layername+".shp")
@@ -468,14 +469,28 @@ class ShapeFile():
                 print "Updating ", filename
             else: 
                 print "Could not open ", filename
-            self.dst_layer = self.dst_ds.GetLayerByName(dst_layername)
+            
+            self.dst_layer = self.dst_ds.GetLayer()
+            feature =  self.dst_layer.GetNextFeature()
+            #iterate over all features and add missing fields
+            
+            if len(feature.keys()) > len(fields.keys()):
+                for key in fields.keys():
+                    if key not in feature.keys():
+                        fd = ogr.FieldDefn(key, fields[key])
+                        self.dst_layer.CreateField(fd)
+            
+            self.dst_layer.SyncToDisk()
+            self.dst_layer.ResetReading()
+            
+            
         else:
             Format =  'ESRI Shapefile'
             drv = ogr.GetDriverByName(Format)
             self.dst_ds = drv.CreateDataSource(dst_dir)
             self.dst_layer = self.dst_ds.CreateLayer(dst_layername, srs=srs)
             print "created "+dst_dir+"/"+dst_layername
-            print fields
+            
             for k,v in fields.iteritems():
                 fd = ogr.FieldDefn(k, v)
                 self.dst_layer.CreateField(fd)
@@ -488,7 +503,7 @@ class ShapeFile():
         pass 
         
     def intersect(self, in_dir, in_layer, condition_func, condition_field ,
-        fields, feature_callbacks=[], dst_dir='.', dst_layer="out", srs=None):
+        fields, feature_callbacks=[], dst_dir='.', dst_file="out", srs=None):
         """
         Intersect two shape files creating a new shape file.
         'fields' is i dictionary containing field name and ogr type.
@@ -516,8 +531,8 @@ class ShapeFile():
                 
         # fancy recursion: the method calls the init method of the object
         # it's cool that is possible, but is it O.K.?
-        if dst_layer is not None:
-             outfile = ShapeFile(dst_dir,dst_layer,fields=fields, srs=srs)
+        if dst_file is not None:
+             outfile = ShapeFile(dst_dir,dst_file,fields=fields, srs=srs)
              outfile.dst_layer.SyncToDisk()        
         infile = ShapeFile(in_dir, in_layer)
         
@@ -527,12 +542,11 @@ class ShapeFile():
         
         for item in range(self.dst_layer.GetFeatureCount()):
             featureA = self.dst_layer.GetNextFeature()
-            #x = featureA.GetField(condition_field)
+    
             if eval(condition_func):  
                 positives.append(featureA)
-        #print "Positive polygons:", len(positives)
+        
         for x,polygon in enumerate(positives):
-            #import pdb; pdb.set_trace()
             for item in range(infile.dst_layer.GetFeatureCount()):
                 featureB = infile.dst_layer.GetNextFeature()
                 featureB_geom = featureB.GetGeometryRef() 
@@ -551,7 +565,7 @@ class ShapeFile():
         outfile.dst_layer.SyncToDisk()
 
         
-class LandUseShp():
+class LandUseShp(ShapeFile):
     """
     Get landuses from shapefile, create landuses raster
     """
@@ -571,6 +585,7 @@ class LandUseShp():
         else: 
             self.dataSource = driver.Open(shapefilepath, 0)
         self.layer = self.dataSource.GetLayer()
+        self.dst_layer = self.dataSource.GetLayer()
         self.NPolygons = self.layer.GetFeatureCount()
         # store vertices of each polygon
         self.Boundaries = [""]*self.NPolygons
